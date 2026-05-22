@@ -7,11 +7,3 @@
   script.onload = function() { this.remove(); };
   (document.head || document.documentElement).appendChild(script);
 })();
-
-function sendEchartsStackMessage(stack) {
-  window.postMessage({
-    source: 'foxesscloud-extension',
-    type: 'ECHARTS_CONTROL',
-    stack
-  }, '*');
-}

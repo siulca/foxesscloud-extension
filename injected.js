@@ -132,7 +132,7 @@ function injectUnstackToggle() {
   wrapper.style.gap = '8px';
 
   wrapper.innerHTML = `
-    <input type="checkbox" id="foxess-unstack-checkbox" 
+    <input type="checkbox" id="foxess-unstack-checkbox" checked
            style="width: 18px; height: 18px; accent-color: #1890ff; cursor: pointer;">
     <label for="foxess-unstack-checkbox" 
            class="mode_sched_name" 
