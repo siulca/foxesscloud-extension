@@ -243,33 +243,68 @@ function renderSankeyFromData(energyData) {
   const charged = parseFloat(energyData.consumption?.charge?.generation) || 0;
 
   // Node names (unique)
-  const nodeNames = [
-    "Imported",
-    "PV Produced",
-    "Discharged",
-    "Exported",
-    "Consumed",
-    "Charged",
+  const nodes = [
+    {
+      name: "Imported",
+      itemStyle: { color: "rgb(198, 158, 255)" },
+      label: {
+        backgroundColor: "rgb(213, 183, 255)",
+      },
+    },
+    {
+      name: "Solar",
+      itemStyle: { color: "rgb(8, 151, 156)" },
+      label: {
+        backgroundColor: "rgb(4, 118, 122)",
+      },
+    },
+    {
+      name: "Discharged",
+      itemStyle: { color: "rgb(105, 177, 255)" },
+      label: {
+        backgroundColor: "rgb(149, 200, 255)",
+      },
+    },
+    {
+      name: "Exported",
+      itemStyle: { color: "rgb(130, 27, 121)" },
+      label: {
+        backgroundColor: "rgb(178, 24, 165)",
+      },
+    },
+    {
+      name: "Consumed",
+      itemStyle: { color: "rgb(250, 140, 22)" },
+      label: {
+        backgroundColor: "rgb(255, 163, 24)",
+      },
+    },
+    {
+      name: "Charged",
+      itemStyle: { color: "rgb(235, 47, 150)" },
+      label: {
+        backgroundColor: "rgb(218, 3, 121)",
+      },
+    },
   ];
-  const nodes = nodeNames.map((name) => ({ name }));
 
   // Realistic PV energy flows:
-  // PV Produced → Consumed (self-consumption), Exported, Charged
+  // Solar → Consumed (self-consumption), Exported, Charged
   // Imported → Consumed
   // Discharged → Consumed
-  // (Charged is only from PV Produced)
-  // (Exported is only from PV Produced)
+  // (Charged is only from Solar)
+  // (Exported is only from Solar)
   const links = [];
   if (pvProduced && pvSelfConsumption)
     links.push({
-      source: "PV Produced",
+      source: "Solar",
       target: "Consumed",
       value: pvSelfConsumption,
     });
   if (pvProduced && exported)
-    links.push({ source: "PV Produced", target: "Exported", value: exported });
+    links.push({ source: "Solar", target: "Exported", value: exported });
   if (pvProduced && charged)
-    links.push({ source: "PV Produced", target: "Charged", value: charged });
+    links.push({ source: "Solar", target: "Charged", value: charged });
   if (imported && consumed)
     links.push({ source: "Imported", target: "Consumed", value: imported });
   if (discharged && consumed)
@@ -332,43 +367,52 @@ function renderSankeyFromData(energyData) {
       },
       series: [
         {
-          // center: ["50%", "50%"],
+          type: "sankey",
           top: 40,
           right: 15,
-          left: "0%",
-          bottom: 10,
-          type: "sankey",
+          left: 0,
+          bottom: 40,
+          nodeWidth: 90,
           data: nodes.map((n) => {
             // Add percent to label if node has total
             const total = nodeTotals[n.name] || 0;
             return {
               ...n,
               label: {
+                ...n.label,
+                width: 70,
                 show: true,
-                position: "insideLeft",
+                position: "insideTopLeft",
                 fontWeight: "bold",
-                color: "#333",
-                formatter: function (params) {
-                  if (total > 0) {
-                    // Show node name and percent of total flow
-                    const percent = (
-                      (total /
-                        Object.values(nodeTotals).reduce(
-                          (a, b) => Math.max(a, b),
-                          1,
-                        )) *
-                      100
-                    ).toFixed(1);
-                    return `${params.name}\n${percent}%`;
-                  }
-                  return params.name;
-                },
+                color: "inherit",
+                padding: 5,
+                formatter: "{b}\n{c} kWh",
+                shadowColor: "rgba(0,0,0,0.25)",
+                shadowBlur: 10,
+                shadowOffsetY: 2,
+                borderRadius: 2,
+                borderWidth: 1,
+                borderColor: "rgba(0,0,0,0.25)",
+                // formatter: function (params) {
+                //   if (total > 0) {
+                //     // Show node name and percent of total flow
+                //     const percent = (
+                //       (total /
+                //         Object.values(nodeTotals).reduce(
+                //           (a, b) => Math.max(a, b),
+                //           1,
+                //         )) *
+                //       100
+                //     ).toFixed(1);
+                //     return `${params.name}\n${percent}%`;
+                //   }
+                //   return params.name;
+                // },
               },
             };
           }),
-          links: filteredLinks,
-          nodeWidth: 90,
           // orient: "vertical",
+          links: filteredLinks,
           emphasis: { focus: "adjacency" },
           lineStyle: { color: "gradient", curveness: 0.5, opacity: 0.5 },
         },
