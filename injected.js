@@ -220,113 +220,126 @@ setTimeout(() => {
   applyToAllCharts();
 }, 1500);
 
-// ==================== Sankey ECharts Injection (Network Intercept) ====================
 function renderSankeyFromData(energyData) {
-  console.log("[Sankey] Rendering with energy data:", energyData);
-  // Find the target element
   const statR = document.querySelector(".eenery_stat_r");
-  if (!statR || document.getElementById("foxesscloud-sankey-container")) return;
+  let container = document.getElementById("foxesscloud-sankey-container");
 
-  // Extract values from actual API data structure
-  // All values are strings, so parseFloat is used
-  const pvProduced = parseFloat(energyData.production?.solar?.generation) || 0;
-  const pvSelfConsumption =
-    parseFloat(energyData.production?.selfConsumption?.generation) || 0;
-  const exported =
-    parseFloat(energyData.production?.gridExport?.generation) || 0;
-  const discharged =
-    parseFloat(energyData.production?.disCharge?.generation) || 0;
-  const consumed =
-    parseFloat(energyData.consumption?.consumption?.generation) || 0;
-  const imported =
-    parseFloat(energyData.consumption?.gridImport?.generation) || 0;
-  const charged = parseFloat(energyData.consumption?.charge?.generation) || 0;
+  if (!container) {
+    if (!statR) return;
 
-  // Node names (unique)
+    container = document.createElement("div");
+    container.id = "foxesscloud-sankey-container";
+    container.style.width = "30%";
+    container.style.margin = "0";
+
+    statR.parentNode.insertBefore(container, statR);
+    statR.remove();
+  }
+
+  // ====================== UNIT CONVERSION ======================
+  function toKWh(value, unit) {
+    if (!value || isNaN(parseFloat(value))) return 0;
+    const num = parseFloat(value);
+    return unit?.toUpperCase() === "MWH" ? num * 1000 : num;
+  }
+
+  const pvProduced = toKWh(
+    energyData.production?.solar?.generation,
+    energyData.production?.solar?.unit,
+  );
+  const pvSelfConsumption = toKWh(
+    energyData.production?.selfConsumption?.generation,
+    energyData.production?.selfConsumption?.unit,
+  );
+  const exported = toKWh(
+    energyData.production?.gridExport?.generation,
+    energyData.production?.gridExport?.unit,
+  );
+  const discharged = toKWh(
+    energyData.production?.disCharge?.generation,
+    energyData.production?.disCharge?.unit,
+  );
+  const consumed = toKWh(
+    energyData.consumption?.consumption?.generation,
+    energyData.consumption?.consumption?.unit,
+  );
+  const imported = toKWh(
+    energyData.consumption?.gridImport?.generation,
+    energyData.consumption?.gridImport?.unit,
+  );
+  const charged = toKWh(
+    energyData.consumption?.charge?.generation,
+    energyData.consumption?.charge?.unit,
+  );
+
+  const displayUnit = "kWh";
+
+  // ====================== NODES & LINKS ======================
   const nodes = [
     {
       name: "Imported",
       itemStyle: { color: "rgb(198, 158, 255)" },
-      label: {
-        backgroundColor: "rgb(213, 183, 255)",
-      },
+      label: { backgroundColor: "rgb(213, 183, 255)" },
     },
     {
       name: "Solar",
       itemStyle: { color: "rgb(8, 151, 156)" },
-      label: {
-        backgroundColor: "rgb(4, 118, 122)",
-      },
+      label: { backgroundColor: "rgb(4, 118, 122)" },
     },
     {
       name: "Discharged",
       itemStyle: { color: "rgb(105, 177, 255)" },
-      label: {
-        backgroundColor: "rgb(149, 200, 255)",
-      },
+      label: { backgroundColor: "rgb(149, 200, 255)" },
     },
     {
       name: "Exported",
       itemStyle: { color: "rgb(130, 27, 121)" },
-      label: {
-        backgroundColor: "rgb(178, 24, 165)",
-      },
+      label: { backgroundColor: "rgb(178, 24, 165)" },
     },
     {
       name: "Consumed",
       itemStyle: { color: "rgb(250, 140, 22)" },
-      label: {
-        backgroundColor: "rgb(255, 163, 24)",
-      },
+      label: { backgroundColor: "rgb(255, 163, 24)" },
     },
     {
       name: "Charged",
       itemStyle: { color: "rgb(235, 47, 150)" },
-      label: {
-        backgroundColor: "rgb(218, 3, 121)",
-      },
+      label: { backgroundColor: "rgb(218, 3, 121)" },
     },
   ];
 
-  // Realistic PV energy flows:
-  // Solar → Consumed (self-consumption), Exported, Charged
-  // Imported → Consumed
-  // Discharged → Consumed
-  // (Charged is only from Solar)
-  // (Exported is only from Solar)
   const links = [];
-  if (pvProduced && pvSelfConsumption)
+  if (pvSelfConsumption > 0)
     links.push({
       source: "Solar",
       target: "Consumed",
       value: pvSelfConsumption,
     });
-  if (pvProduced && exported)
+  if (exported > 0)
     links.push({ source: "Solar", target: "Exported", value: exported });
-  if (pvProduced && charged)
+  if (charged > 0)
     links.push({ source: "Solar", target: "Charged", value: charged });
-  if (imported && consumed)
+  if (imported > 0 && consumed > 0)
     links.push({ source: "Imported", target: "Consumed", value: imported });
-  if (discharged && consumed)
+  if (discharged > 0 && consumed > 0)
     links.push({ source: "Discharged", target: "Consumed", value: discharged });
-  const filteredLinks = links.filter(
-    (l) => l.value > 0 && l.source && l.target,
-  );
 
-  // Create container
-  const container = document.createElement("div");
-  container.id = "foxesscloud-sankey-container";
-  container.style.width = "100%";
-  container.style.maxWidth = "400px";
-  // container.style.height = "320px";
-  container.style.margin = "0";
+  const filteredLinks = links.filter((l) => l.value > 0);
 
-  // Insert before statR
-  statR.parentNode.insertBefore(container, statR);
+  // ====================== CALCULATE TOTALS ======================
+  const nodeTotals = {};
+  filteredLinks.forEach((link) => {
+    nodeTotals[link.source] = (nodeTotals[link.source] || 0) + link.value;
+    nodeTotals[link.target] = (nodeTotals[link.target] || 0) + link.value;
+  });
 
-  // Load ECharts if not present
+  // Grand total = total energy flowing through the system (use sources)
+  const grandTotal =
+    Object.values(nodeTotals).reduce((sum, val) => sum + val, 0) / 2; // average to avoid double counting
+
+  // ====================== RENDER ======================
   function loadEcharts(cb) {
-    if (window.echarts && window.echarts.init) return cb(window.echarts);
+    if (window.echarts?.init) return cb(window.echarts);
     const script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js";
     script.onload = () => cb(window.echarts);
@@ -334,141 +347,127 @@ function renderSankeyFromData(energyData) {
   }
 
   loadEcharts((echarts) => {
-    // Calculate total input for each node for percentage labels
-    const nodeTotals = {};
-    filteredLinks.forEach((link) => {
-      nodeTotals[link.target] = (nodeTotals[link.target] || 0) + link.value;
-    });
-    filteredLinks.forEach((link) => {
-      nodeTotals[link.source] = (nodeTotals[link.source] || 0) + link.value;
-    });
-
-    // Add percentage to node labels
     const sankeyOption = {
-      title: { text: "Energy Flow Sankey", left: "center", top: 0 },
       tooltip: {
         trigger: "item",
-        triggerOn: "mousemove",
         formatter: function (params) {
           if (params.dataType === "edge") {
-            // Show value and percent of source
-            const percent = nodeTotals[params.data.source]
-              ? (
-                  (params.data.value / nodeTotals[params.data.source]) *
-                  100
-                ).toFixed(1)
-              : "";
-            return `${params.data.source} → ${params.data.target}<br/>${params.data.value} kWh (${percent}%)`;
-          } else {
-            // Show total for node
-            return `${params.name}<br/>${nodeTotals[params.name] || 0} kWh`;
+            const sourceTotal = nodeTotals[params.data.source] || 1;
+            const percent = ((params.data.value / sourceTotal) * 100).toFixed(
+              1,
+            );
+            return `${params.data.source} → ${params.data.target}<br/>${params.data.value.toFixed(2)} ${displayUnit} (${percent}%)`;
           }
+          const total = nodeTotals[params.name] || 0;
+          const percent =
+            grandTotal > 0 ? ((total / grandTotal) * 100).toFixed(1) : 0;
+          return `${params.name}<br/>${total.toFixed(2)} ${displayUnit} (${percent}%)`;
         },
       },
       series: [
         {
           type: "sankey",
-          top: 40,
+          top: 0,
           right: 15,
           left: 0,
           bottom: 40,
           nodeWidth: 90,
-          data: nodes.map((n) => {
-            // Add percent to label if node has total
-            const total = nodeTotals[n.name] || 0;
-            return {
-              ...n,
-              label: {
-                ...n.label,
-                width: 70,
-                show: true,
-                position: "insideTopLeft",
-                fontWeight: "bold",
-                color: "inherit",
-                padding: 5,
-                formatter: "{b}\n{c} kWh",
-                shadowColor: "rgba(0,0,0,0.25)",
-                shadowBlur: 10,
-                shadowOffsetY: 2,
-                borderRadius: 2,
-                borderWidth: 1,
-                borderColor: "rgba(0,0,0,0.25)",
-                // formatter: function (params) {
-                //   if (total > 0) {
-                //     // Show node name and percent of total flow
-                //     const percent = (
-                //       (total /
-                //         Object.values(nodeTotals).reduce(
-                //           (a, b) => Math.max(a, b),
-                //           1,
-                //         )) *
-                //       100
-                //     ).toFixed(1);
-                //     return `${params.name}\n${percent}%`;
-                //   }
-                //   return params.name;
-                // },
+          data: nodes.map((n) => ({
+            ...n,
+            label: {
+              ...n.label,
+              width: 70,
+              show: true,
+              position: "insideTopLeft",
+              fontWeight: "bold",
+              color: "inherit",
+              padding: 5,
+              shadowColor: "rgba(0,0,0,0.25)",
+              shadowBlur: 10,
+              shadowOffsetY: 2,
+              borderRadius: 2,
+              borderWidth: 1,
+              borderColor: "rgba(0,0,0,0.25)",
+              formatter: function (params) {
+                const total = nodeTotals[params.name] || 0;
+                if (total > 0 && grandTotal > 0) {
+                  const percent = ((total / grandTotal) * 100).toFixed(1);
+                  return `${params.name}\n${percent}%`;
+                }
+                return params.name;
               },
-            };
-          }),
-          // orient: "vertical",
+            },
+          })),
           links: filteredLinks,
           emphasis: { focus: "adjacency" },
           lineStyle: { color: "gradient", curveness: 0.5, opacity: 0.5 },
         },
       ],
     };
-    const chart = echarts.init(container);
-    chart.setOption(sankeyOption);
+
+    if (container.__sankeyChart) {
+      container.__sankeyChart.setOption(sankeyOption, true);
+    } else {
+      const chart = echarts.init(container);
+      container.__sankeyChart = chart;
+      chart.setOption(sankeyOption);
+    }
   });
 }
 
-// Intercept fetch and XHR for the energy info endpoint
 (function interceptEnergyInfo() {
   const ENDPOINT = "/dew/w/plant/energy/info";
+
   function handleEnergyResponse(json) {
-    // Use the actual structure: { errno, msg, result }
-    if (
-      json &&
-      json.result &&
-      json.result.production &&
-      json.result.consumption
-    ) {
+    if (json?.result?.production && json?.result?.consumption) {
       renderSankeyFromData(json.result);
     }
   }
 
-  // Patch fetch
-  const origFetch = window.fetch;
-  window.fetch = function (...args) {
-    return origFetch.apply(this, args).then(async (resp) => {
-      try {
-        if (typeof args[0] === "string" && args[0].includes(ENDPOINT)) {
-          const clone = resp.clone();
-          const json = await clone.json();
-          handleEnergyResponse(json);
-        }
-      } catch (e) {}
-      return resp;
-    });
+  // ====================== FETCH INTERCEPTOR ======================
+  const originalFetch = window.fetch;
+
+  window.fetch = async function (...args) {
+    const response = await originalFetch.apply(this, args);
+
+    try {
+      const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+      if (url.includes(ENDPOINT)) {
+        const cloned = response.clone();
+        const json = await cloned.json().catch(() => null);
+        if (json) handleEnergyResponse(json);
+      }
+    } catch (e) {
+      console.debug("Fetch interceptor error (non-fatal)", e);
+    }
+
+    return response;
   };
 
-  // Patch XHR
+  // ====================== XHR INTERCEPTOR ======================
   const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+
   XMLHttpRequest.prototype.open = function (...args) {
-    this._isEnergyInfo = args[1] && args[1].includes(ENDPOINT);
+    const url = args[1];
+    this._isEnergyInfo = typeof url === "string" && url.includes(ENDPOINT);
     return origOpen.apply(this, args);
   };
-  const origSend = XMLHttpRequest.prototype.send;
+
   XMLHttpRequest.prototype.send = function (...args) {
     if (this._isEnergyInfo) {
       this.addEventListener("load", function () {
         try {
-          const json = JSON.parse(this.responseText);
-          handleEnergyResponse(json);
-        } catch (e) {}
+          if (this.responseText) {
+            handleEnergyResponse(JSON.parse(this.responseText));
+          }
+        } catch (e) {
+          console.debug("XHR parse error", e);
+        }
       });
     }
     return origSend.apply(this, args);
   };
+
+  console.log("✅ Energy interceptor for Sankey Diagram installed");
 })();
