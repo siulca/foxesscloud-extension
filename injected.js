@@ -214,3 +214,133 @@ setTimeout(() => {
 
   applyToAllCharts();
 }, 1500);
+
+// ==================== Sankey ECharts Injection ====================
+function injectSankeyGraph() {
+
+  // Retry logic for async data
+  if (!window.__foxesscloudSankeyRetry) window.__foxesscloudSankeyRetry = 0;
+  const MAX_RETRIES = 10;
+  const statR = document.querySelector('.eenery_stat_r');
+  if (!statR || document.getElementById('foxesscloud-sankey-container')) {
+    window.__foxesscloudSankeyRetry = 0;
+    return;
+  }
+
+  // Parse DOM for data
+  const rows = statR.querySelectorAll('.eenery_stat_row');
+  if (rows.length < 2) return;
+  const supplyCols = rows[0].querySelectorAll('.eenery_stat_col');
+  const usageCols = rows[1].querySelectorAll('.eenery_stat_col');
+
+  // Helper to extract value and label
+  function getColData(col) {
+    const valueText = col.querySelector('.eenery_stat_col_nu')?.textContent || '';
+    const value = parseFloat(valueText);
+    const label = col.querySelector('.eenery_stat_col_na')?.textContent.trim() || '';
+    console.log(label, value, valueText)
+    return { label, value: isNaN(value) ? 0 : value };
+  }
+
+  // Extract data
+  const supplyData = Array.from(supplyCols).map(getColData);
+  const usageData = Array.from(usageCols).map(getColData);
+
+
+  // Map supply/usage by label for easy access
+  const supplyMap = Object.fromEntries(supplyData.map(d => [d.label, d.value]));
+  const usageMap = Object.fromEntries(usageData.map(d => [d.label, d.value]));
+
+  // Node names (unique)
+  const nodeNames = [
+    'Imported', 'PV Produced', 'Discharged',
+    'Exported', 'Consumed', 'Charged'
+  ];
+  const nodes = nodeNames.map(name => ({ name }));
+
+  // Realistic PV energy flows:
+  // PV Produced → Consumed, Exported, Charged
+  // Imported → Consumed
+  // Discharged → Consumed
+  // (Charged is only from PV Produced)
+  // (Exported is only from PV Produced)
+  // Use available values, fallback to 0 if missing
+  const links = [];
+  // PV Produced flows
+  if (supplyMap['PV Produced'] && usageMap['Consumed']) {
+    // Estimate PV to Consumed: Consumed - Imported - Discharged (if positive)
+    let pvToConsumed = usageMap['Consumed'] - (supplyMap['Imported'] || 0) - (supplyMap['Discharged'] || 0);
+    if (pvToConsumed < 0) pvToConsumed = 0;
+    links.push({ source: 'PV Produced', target: 'Consumed', value: pvToConsumed });
+  }
+  if (supplyMap['PV Produced'] && usageMap['Exported']) {
+    links.push({ source: 'PV Produced', target: 'Exported', value: usageMap['Exported'] });
+  }
+  if (supplyMap['PV Produced'] && usageMap['Charged']) {
+    links.push({ source: 'PV Produced', target: 'Charged', value: usageMap['Charged'] });
+  }
+  // Imported flows
+  if (supplyMap['Imported'] && usageMap['Consumed']) {
+    links.push({ source: 'Imported', target: 'Consumed', value: supplyMap['Imported'] });
+  }
+  // Discharged flows
+  if (supplyMap['Discharged'] && usageMap['Consumed']) {
+    links.push({ source: 'Discharged', target: 'Consumed', value: supplyMap['Discharged'] });
+  }
+
+
+  // Remove links with zero or negative value
+  const filteredLinks = links.filter(l => l.value > 0 && l.source && l.target);
+
+  // If no valid links, retry after a short delay (async data)
+  if (filteredLinks.length === 0 && window.__foxesscloudSankeyRetry < MAX_RETRIES) {
+    window.__foxesscloudSankeyRetry++;
+    setTimeout(injectSankeyGraph, 500);
+    return;
+  }
+  window.__foxesscloudSankeyRetry = 0;
+
+  // Create container
+  const container = document.createElement('div');
+  container.id = 'foxesscloud-sankey-container';
+  container.style.width = '100%';
+  container.style.height = '320px';
+  container.style.marginBottom = '16px';
+
+  // Insert before statR
+  statR.parentNode.insertBefore(container, statR);
+
+  // Load ECharts if not present
+  function loadEcharts(cb) {
+    if (window.echarts && window.echarts.init) return cb(window.echarts);
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
+    script.onload = () => cb(window.echarts);
+    document.head.appendChild(script);
+  }
+
+  loadEcharts((echarts) => {
+    const sankeyOption = {
+      title: { text: 'Energy Flow Sankey', left: 'center', top: 10 },
+      tooltip: { trigger: 'item', triggerOn: 'mousemove' },
+      series: [{
+        type: 'sankey',
+        data: nodes,
+        links: filteredLinks,
+        emphasis: { focus: 'adjacency' },
+        lineStyle: { color: 'gradient', curveness: 0.5 },
+        label: { color: '#333', fontWeight: 'bold' }
+      }]
+    };
+    const chart = echarts.init(container);
+    chart.setOption(sankeyOption);
+  });
+}
+
+// Observe and inject Sankey when DOM is ready
+const sankeyObserver = new MutationObserver(() => {
+  injectSankeyGraph();
+});
+sankeyObserver.observe(document.body, { childList: true, subtree: true });
+// Also try once on load
+setTimeout(injectSankeyGraph, 2000);
