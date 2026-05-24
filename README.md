@@ -2,6 +2,9 @@
 
 A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful quality-of-life features.
 
+<img width="1510" height="402" alt="image" src="https://github.com/user-attachments/assets/9c8bff63-6911-4378-96b1-ef8618590611" />
+
+
 ## Features
 
 - **Popup Controls**: Quick access to toggles directly from the extension popup
