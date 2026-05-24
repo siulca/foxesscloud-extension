@@ -1,32 +1,40 @@
-let isUnstacked = true;
-let showBatteryEstimate = false;
+document.addEventListener("DOMContentLoaded", async () => {
+  const unstackCharts = document.getElementById("unstackCharts");
+  const showSankey = document.getElementById("showSankey");
 
-const sendMessage = (message) => {
-  chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-    chrome.tabs.sendMessage(tabs[0].id, message);
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+  if (!tab?.id) {
+    console.error("❌ No active tab found");
+    return;
+  }
+
+  // Send message using postMessage (this is what injected.js listens for)
+  const sendToInjected = (type, value) => {
+    chrome.scripting
+      .executeScript({
+        target: { tabId: tab.id },
+        func: (message) => {
+          window.postMessage(message, "*");
+        },
+        args: [
+          {
+            source: "foxesscloud-extension",
+            type: type,
+            value: value,
+          },
+        ],
+      })
+      .catch((err) => console.warn("Failed to send message:", err));
+  };
+
+  unstackCharts.addEventListener("change", (e) => {
+    sendToInjected("SET_UNSTACKED", !e.target.checked);
   });
-};
 
-document.getElementById('toggle').onclick = () => {
-  isUnstacked = !isUnstacked;
-
-  sendMessage({
-    type: 'SET_UNSTACKED',
-    value: isUnstacked
+  showSankey.addEventListener("change", (e) => {
+    sendToInjected("SHOW_SANKEY", e.target.checked);
   });
 
-  document.getElementById('toggle').textContent = 
-    isUnstacked ? "Switch to Stacked" : "Switch to Unstacked";
-};
-
-document.getElementById('showBatteryEstimate').onchange = (event) => {
-  showBatteryEstimate = event.target.checked;
-
-  sendMessage({
-    type: 'SET_BATTERY_ESTIMATE',
-    value: showBatteryEstimate
-  });
-};
-
-// Initial label
-document.getElementById('toggle').textContent = "Switch to Stacked";
+  console.log("✅ Popup ready - controls should now work");
+});

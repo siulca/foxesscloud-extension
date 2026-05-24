@@ -1,25 +1,52 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <style>
-    body { width: 280px; padding: 12px; font-family: Arial; }
-    button, select { width: 100%; padding: 10px; margin: 8px 0; }
-  </style>
-</head>
-<body>
-  <h3>ECharts Controls</h3>
-  <select id="typeSelect">
-    <option value="bar">Bar Vertical</option>
-    <option value="bar-horizontal">Bar Horizontal</option>
-    <option value="line">Line</option>
-  </select>
-  <button id="toggle">Toggle Stacked ↔ Unstacked</button>
-  <button id="refresh">Refresh Detection</button>
-  <label style="display:block; margin: 10px 0; font-size: 14px;">
-    <input id="showBatteryEstimate" type="checkbox" style="margin-right: 8px;" />
-    Show battery time estimate
-  </label>
+  <head>
+    <style>
+      body {
+        width: 240px;
+        padding: 12px;
+        font-family: Arial;
+      }
+      h3 {
+        margin-top: 0;
+      }
+      .checkbox-label {
+        display: block;
+        margin: 10px 0;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Fox ESS Cloud V2 Controls</h3>
+    <label class="checkbox-label">
+      <input
+        id="unstackCharts"
+        type="checkbox"
+        checked
+        style="margin-right: 8px"
+      />
+      Unstack charts
+    </label>
+    <label class="checkbox-label">
+      <input
+        id="showSankey"
+        type="checkbox"
+        checked
+        style="margin-right: 8px"
+      />
+      Show Sankey diagram
+    </label>
+    <label class="checkbox-label">
+      <input
+        disabled
+        id="showBatteryEstimate"
+        type="checkbox"
+        style="margin-right: 8px"
+      />
+      Show battery time estimate
+    </label>
 
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>

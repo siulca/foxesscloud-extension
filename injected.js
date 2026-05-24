@@ -1,12 +1,12 @@
-// injected.js
 let currentStackMode = false; // false = unstacked
+let showSankey = false;
 let lastApplyTime = 0;
 let applyTimeout = null;
 
 // Global cache: chart ID → original series data
 const originalDataCache = new Map();
 
-function applyMode(inst, stack) {
+function toggleUnstack(inst, stack) {
   if (!inst) return;
 
   const now = Date.now();
@@ -90,78 +90,52 @@ function applyMode(inst, stack) {
       replaceMerge: ["series", "yAxis"],
     });
     inst.resize();
-    //console.log(`[ApplyMode] ✅ Applied changes to chart ${chartId}`);
   } else {
-    //console.log(`[ApplyMode] No changes needed for chart ${chartId}`);
   }
 }
 
 function applyToAllCharts() {
-  document.querySelectorAll(".echart").forEach((container) => {
+  const containers = document.querySelectorAll(".echart");
+
+  if (containers.length === 0) {
+    console.warn("⚠️ No .echart elements found on page!");
+    return;
+  }
+
+  containers.forEach((container, i) => {
     const inst = window.echarts?.getInstanceByDom(container);
-    if (inst) applyMode(inst, currentStackMode);
+    if (inst) {
+      toggleUnstack(inst, currentStackMode);
+    }
   });
 }
 
 // ==================== Message Handler ====================
 window.addEventListener("message", (event) => {
+  // Security check - only accept messages from our extension
   if (event.data?.source !== "foxesscloud-extension") return;
-  if (event.data.type !== "ECHARTS_CONTROL") return;
 
-  currentStackMode = !!event.data.stack;
+  const data = event.data;
 
-  applyToAllCharts();
+  switch (data.type) {
+    case "SET_UNSTACKED":
+      currentStackMode = data.value;
+      applyToAllCharts();
+      break;
+
+    // Add more message types easily here:
+    case "SHOW_SANKEY":
+      showSankeyDiagram(data.value);
+      break;
+
+    // case "SHOW_BATTERY_ESTIMATE":
+    //   toggleBatteryEstimate(data.value);
+    //   break;
+
+    default:
+      console.warn("Unknown message type:", data.type);
+  }
 });
-
-// ==================== Toggle UI - Simple Checkbox ====================
-function injectUnstackToggle() {
-  if (document.getElementById("foxesscloud-unstack-toggle")) {
-    return true;
-  }
-
-  const legendsContainer = document.querySelector(".rightLegends");
-  if (!legendsContainer) {
-    return false;
-  }
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "mg-l8 flex-vertical-center";
-  wrapper.id = "foxesscloud-unstack-toggle";
-  wrapper.style.marginLeft = "24px";
-  wrapper.style.marginTop = "16px";
-  wrapper.style.display = "flex";
-  wrapper.style.alignItems = "center";
-  wrapper.style.gap = "8px";
-
-  wrapper.innerHTML = `
-    <input type="checkbox" id="foxess-unstack-checkbox" checked
-           style="width: 18px; height: 18px; accent-color: #1890ff; cursor: pointer;">
-    <label for="foxess-unstack-checkbox" 
-           class="mode_sched_name" 
-           style="margin: 0; cursor: pointer; user-select: none;">
-      Unstacked
-    </label>
-  `;
-
-  legendsContainer.appendChild(wrapper);
-
-  const checkbox = wrapper.querySelector("input");
-
-  checkbox.addEventListener("change", function () {
-    const isUnstacked = this.checked;
-
-    window.postMessage(
-      {
-        source: "foxesscloud-extension",
-        type: "ECHARTS_CONTROL",
-        stack: !isUnstacked, // checked = Unstacked → stack = false
-      },
-      "*",
-    );
-  });
-
-  return true;
-}
 
 // ==================== ECharts Hooking ====================
 function hookEchartsInstance(inst) {
@@ -170,7 +144,7 @@ function hookEchartsInstance(inst) {
 
   inst.on("rendered", () => {
     setTimeout(() => {
-      applyMode(inst, currentStackMode);
+      toggleUnstack(inst, currentStackMode);
     }, 500);
   });
 }
@@ -199,10 +173,6 @@ function startObserving() {
 
 const bodyObserver = new MutationObserver(() => {
   startObserving();
-
-  if (!document.getElementById("foxesscloud-unstack-toggle")) {
-    setTimeout(() => injectUnstackToggle(), 1000);
-  }
 });
 
 bodyObserver.observe(document.body, { childList: true, subtree: true });
@@ -210,7 +180,6 @@ bodyObserver.observe(document.body, { childList: true, subtree: true });
 // ==================== Initial Setup ====================
 setTimeout(() => {
   startObserving();
-  injectUnstackToggle();
 
   document.querySelectorAll(".echart").forEach((container) => {
     const inst = window.echarts?.getInstanceByDom(container);
@@ -221,6 +190,17 @@ setTimeout(() => {
 }, 1500);
 
 // ==================== Sankey Diagram ====================
+function showSankeyDiagram(isOn) {
+  showSankey = !!isOn;
+
+  const sankey = document.getElementById("foxesscloud-sankey-container");
+  const statR = document.querySelector(".eenery_stat_r");
+  if (sankey) {
+    sankey.style.display = showSankey ? "block" : "none";
+    statR.style.display = !showSankey ? "block" : "none";
+  }
+}
+
 function renderSankeyFromData(energyData) {
   const statR = document.querySelector(".eenery_stat_r");
   let container = document.getElementById("foxesscloud-sankey-container");
@@ -234,7 +214,7 @@ function renderSankeyFromData(energyData) {
     container.style.margin = "0";
 
     statR.parentNode.insertBefore(container, statR);
-    statR.remove();
+    statR.style.display = showSankey ? "block" : "none";
   }
 
   // ====================== UNIT CONVERSION ======================
