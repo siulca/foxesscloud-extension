@@ -1,4 +1,4 @@
-# Fox ESS Cloud Enhancements - browser extension
+# Fox ESS Cloud v2 Enhancements - browser extension
 
 A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful quality-of-life features.
 
@@ -15,7 +15,7 @@ A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful q
 2. Open Chrome and go to `chrome://extensions/`
 3. Enable **Developer mode** (top right)
 4. Click **"Load unpacked"** and select the **`dist/`** folder
-5. Visit [https://www.foxesscloud.com](https://www.foxesscloud.com) and log in
+5. Visit [https://www.foxesscloud.com/v2/](https://www.foxesscloud.com/v2/) and log in
 
 ## Usage
 
