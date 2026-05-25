@@ -3,6 +3,7 @@
 A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful quality-of-life features.
 
 <img width="1510" height="402" alt="image" src="https://github.com/user-attachments/assets/9c8bff63-6911-4378-96b1-ef8618590611" />
+<img width="273" height="199" alt="image" src="https://github.com/user-attachments/assets/d9bb7de3-0091-4413-9e95-0b0d712a7c34" />
 
 
 ## Features
