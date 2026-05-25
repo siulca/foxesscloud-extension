@@ -1,0 +1,15 @@
+{
+  "name": "foxesscloud-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fox ESS Cloud browser extension enhancements",
+  "scripts": {
+    "build": "npm run build:prod",
+    "build:dev": "esbuild src/injected/index.js --bundle --outfile=dist/injected.js",
+    "build:prod": "esbuild src/injected/index.js --bundle --outfile=dist/injected.js --minify",
+    "watch": "esbuild src/injected/index.js --bundle --outfile=dist/injected.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
