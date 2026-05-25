@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const unstackCharts = document.getElementById("unstackCharts");
   const showSankey = document.getElementById("showSankey");
+  const showSolarGauge = document.getElementById("showSolarGauge");
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -36,5 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     sendToInjected("SHOW_SANKEY", e.target.checked);
   });
 
-  console.log("✅ Popup ready - controls should now work");
+  showSolarGauge.addEventListener("change", (e) => {
+    sendToInjected("SHOW_SOLAR_GAUGE", e.target.checked);
+  });
 });
