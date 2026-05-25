@@ -400,10 +400,7 @@ function renderSankeyFromData(energyData) {
     // Example: store data globally or trigger another function
     if (json?.result?.info?.pvCapacity) {
       window.pvCapacity = json.result.info.pvCapacity;
-      // setTimeout(
-      //   () => createVerticalProgressBar(json?.result?.info?.pvCapacity, 15),
-      //   100,
-      // );
+      window.plantID = json.result.plantID;
     }
   }
 
@@ -471,10 +468,6 @@ function renderSankeyFromData(energyData) {
 
     return origSend.apply(this, args);
   };
-
-  console.log("✅ Interceptors installed for:");
-  console.log("   • Energy Info:", ENERGY_ENDPOINT);
-  console.log("   • Plant Detail:", PLANT_ENDPOINT);
 })();
 
 /**
@@ -510,7 +503,7 @@ function createVerticalProgressBar(percent = 0) {
             transform: translateY(-50%);
         `;
     const capacityKw = document.createElement("div");
-    capacityKw.innerHTML = `<b>${window.pvCapacity}</b> kW`;
+    capacityKw.innerHTML = `<b>${window.pvCapacity}</b> kW<br/></br/></br><br/><b>${percent.toFixed(1)}</b> %`;
     capacityKw.style.cssText = `
             position: absolute;
             top: 0;
@@ -567,8 +560,6 @@ function createVerticalProgressBar(percent = 0) {
     progressWrapper.appendChild(ticks);
     container.appendChild(progressWrapper);
     container.appendChild(capacityKw);
-
-    console.log("[ProgressBar] Vertical progress bar inserted into .fl_tips2");
   }
 
   // Update fill height
@@ -584,103 +575,63 @@ function createVerticalProgressBar(percent = 0) {
 // ====================== VERTICAL PROGRESS BAR + ROBUST WS ======================
 
 (function initializeVerticalProgressBar() {
-  console.log("🚀 [VerticalProgressBar] Auto-initializing...");
-
-  // ================== CREATE / UPDATE PROGRESS BAR ==================
-  // function createVerticalProgressBar(percent = 0) {
-  //   const container = document.querySelector(".fl_tips2");
-  //   if (!container) return;
-
-  //   let wrapper = document.getElementById("vertical-solar-progress");
-  //   if (!wrapper) {
-  //     wrapper = document.createElement("div");
-  //     wrapper.id = "vertical-solar-progress";
-  //     wrapper.style.cssText = `
-  //               position: absolute;
-  //               width: 14px;
-  //               height: 65px;
-  //               background: #e5e7eb;
-  //               border: 2px solid #2c3e50;
-  //               border-radius: 9999px;
-  //               overflow: hidden;
-  //               box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-  //               z-index: 25;
-  //               right: 12px;
-  //               top: 50%;
-  //               transform: translateY(-50%);
-  //           `;
-
-  //     const fill = document.createElement("div");
-  //     fill.id = "solar-progress-fill";
-  //     fill.style.cssText = `
-  //               position: absolute;
-  //               bottom: 0;
-  //               width: 100%;
-  //               height: 0%;
-  //               background: linear-gradient(to top, rgb(8,151,156), rgb(0,178,184), rgb(0,205,212));
-  //               transition: height 0.4s ease;
-  //           `;
-
-  //     const ticks = document.createElement("div");
-  //     ticks.style.cssText = `position:absolute; inset:0; pointer-events:none;`;
-  //     [25, 50, 75].forEach((p) => {
-  //       const t = document.createElement("div");
-  //       t.style.cssText = `position:absolute; left:0; right:0; height:1.5px; background:rgba(255,255,255,0.9); top:${100 - p}%;`;
-  //       ticks.appendChild(t);
-  //     });
-
-  //     wrapper.appendChild(fill);
-  //     wrapper.appendChild(ticks);
-  //     container.appendChild(wrapper);
-  //     console.log("✅ [ProgressBar] Created successfully");
-  //   }
-
-  //   const fill = document.getElementById("solar-progress-fill");
-  //   if (fill) fill.style.height = `${Math.max(0, Math.min(100, percent))}%`;
-  // }
+  let currentWs = null; // ← Track latest socket
+  let currentListener = null; // ← Keep reference to remove it later
 
   // ================== STRONG WEBSOCKET INTERCEPTOR ==================
   function setupStrongWebSocketInterceptor() {
-    console.log("[WS] Installing strong message interceptor...");
-
-    // Override WebSocket prototype to catch ALL messages
     const originalWebSocket = window.WebSocket;
 
     window.WebSocket = function (url, protocols) {
       const ws = new originalWebSocket(url, protocols);
 
-      // Hook this instance
+      // Check if this is our target socket
       if (url && url.includes("/dew/v0/wsmaitian")) {
-        console.log("🔌 [WS] Intercepted target WebSocket creation");
+        // Remove listener from previous socket
+        if (currentWs && currentListener) {
+          currentWs.removeEventListener("message", currentListener);
+        }
 
-        ws.addEventListener("message", function (event) {
+        // Create new listener
+        currentListener = function (event) {
           try {
             const data = JSON.parse(event.data);
 
-            if (data.errno === 0 && data.result?.node?.solar?.power?.value) {
+            if (
+              data.errno === 0 &&
+              window.plantID === data.result.plantId &&
+              data.result?.node?.solar?.power?.value
+            ) {
               const powerW =
                 parseFloat(data.result.node.solar.power.value) || 0;
               const powerKw =
                 data.result.node.solar.power.unit === "W"
                   ? powerW / 1000
                   : powerW;
+              const percent = (powerKw / (window.pvCapacity || 1)) * 100;
 
-              console.log(`⚡ Solar Power: ${powerKw.toFixed(2)} kW`);
-
-              createVerticalProgressBar((powerKw / window.pvCapacity) * 100);
+              createVerticalProgressBar(percent);
             }
-          } catch (e) {}
+          } catch (e) {
+            // Silent fail
+          }
+        };
+
+        // Attach to this new socket
+        ws.addEventListener("message", currentListener);
+        currentWs = ws; // Update reference
+
+        // Optional: clean up if socket closes
+        ws.addEventListener("close", () => {
+          if (currentWs === ws) {
+            currentWs = null;
+            currentListener = null;
+          }
         });
       }
 
       return ws;
     };
-
-    // Also try to catch already existing connections
-    setTimeout(() => {
-      console.log("[WS] Running fallback search...");
-      // This will help if connection was made before our script
-    }, 1000);
   }
 
   // ================== START ==================
