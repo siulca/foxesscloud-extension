@@ -29,6 +29,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       .catch((err) => console.warn("Failed to send message:", err));
   };
 
+  sendToInjected("SET_UNSTACKED", !unstackCharts.checked);
+
   unstackCharts.addEventListener("change", (e) => {
     sendToInjected("SET_UNSTACKED", !e.target.checked);
   });

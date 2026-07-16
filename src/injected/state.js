@@ -4,7 +4,8 @@
  */
 
 const state = {
-  _currentStackMode: false,
+  // Default to stacked charts until the popup explicitly requests unstacked mode.
+  _currentStackMode: true,
   _showSankey: false,
   _lastApplyTime: 0,
   _applyTimeout: null,

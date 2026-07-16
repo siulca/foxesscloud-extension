@@ -23,6 +23,8 @@ import { applyToAllCharts } from "./chart/unstack.js";
 // Side-effect imports: these modules self-initialize on import
 import "./chart/hook.js";
 import "./interceptor/api.js";
+// Add lightweight axes + guide lines for simple echarts instances
+import "./axes.js";
 
 // ==================== Message Handler ====================
 window.addEventListener("message", (event) => {
