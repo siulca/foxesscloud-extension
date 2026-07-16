@@ -1,4 +1,4 @@
-import { createVerticalProgressBar } from "../progress-bar/vertical.js";
+import { updateSolarProgressFromValue } from "../progress-bar/vertical.js";
 
 /**
  * Initialize the WebSocket interceptor for real-time solar power data.
@@ -26,19 +26,9 @@ export function initializeWebSocketInterceptor() {
         try {
           const data = JSON.parse(event.data);
 
-          if (
-            data.errno === 0 &&
-            window.plantID === data.result.plantId &&
-            data.result?.node?.solar?.power?.value
-          ) {
-            const powerW = parseFloat(data.result.node.solar.power.value) || 0;
-            const powerKw =
-              data.result.node.solar.power.unit === "W"
-                ? powerW / 1000
-                : powerW;
-            const percent = (powerKw / (window.pvCapacity || 1)) * 100;
-
-            createVerticalProgressBar(percent);
+          if (data.errno === 0 && data.result?.node?.solar?.power?.value) {
+            const solarPower = data.result.node.solar.power;
+            updateSolarProgressFromValue(solarPower.value, solarPower.unit);
           }
         } catch (e) {
           // Silent fail

@@ -1,4 +1,5 @@
 import { renderSankeyFromData } from "../sankey/sankey.js";
+import { updateSolarProgressFromValue } from "../progress-bar/vertical.js";
 
 // ====================== ENDPOINTS ======================
 const ENERGY_ENDPOINT = "/dew/w/plant/energy/info";
@@ -15,6 +16,14 @@ function handlePlantDetailResponse(json) {
   if (json?.result?.info?.pvCapacity) {
     window.pvCapacity = json.result.info.pvCapacity;
     window.plantID = json.result.plantID;
+
+    if (window.__foxessSolarState?.value) {
+      updateSolarProgressFromValue(
+        window.__foxessSolarState.value,
+        window.__foxessSolarState.unit,
+        window.pvCapacity,
+      );
+    }
   }
 }
 

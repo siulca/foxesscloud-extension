@@ -3,6 +3,14 @@
  * @param {number} percent - Value between 0 and 100
  * @returns {HTMLElement|null}
  */
+function updateGaugeLabel(percent = 0) {
+  const label = document.getElementById("solar-gauge-label");
+  if (!label) return;
+
+  const capacity = Number(window.pvCapacity ?? 0);
+  label.innerHTML = `<b>${Number.isFinite(capacity) ? capacity.toFixed(1) : "0.0"}</b> kW<br/></br/></br><br/><b>${percent.toFixed(1)}</b> %`;
+}
+
 export function createVerticalProgressBar(percent = 0) {
   // Find target container
   const container = document.querySelector(".fl_tips2");
@@ -33,13 +41,12 @@ export function createVerticalProgressBar(percent = 0) {
         `;
     const capacityKw = document.createElement("div");
     capacityKw.id = "solar-gauge-label";
-    capacityKw.innerHTML = `<b>${window.pvCapacity}</b> kW<br/></br/></br><br/><b>${percent.toFixed(1)}</b> %`;
     capacityKw.style.cssText = `
             position: absolute;
             top: 0;
             left: -100px;
             width: 68px;
-            font-size: 10px;
+            font-size: 14px;
             line-height: 1;
             pointer-events: none;
             text-align: right;
@@ -99,7 +106,28 @@ export function createVerticalProgressBar(percent = 0) {
     fill.style.height = `${clampedPercent}%`;
   }
 
+  updateGaugeLabel(percent);
+
   return progressWrapper;
+}
+
+export function updateSolarProgressFromValue(
+  value,
+  unit = "W",
+  pvCapacity = window.pvCapacity,
+) {
+  const powerW = parseFloat(value) || 0;
+  const powerKw = unit === "W" ? powerW / 1000 : powerW;
+  const capacity = Number(pvCapacity) || 1;
+  const percent = capacity > 0 ? (powerKw / capacity) * 100 : 0;
+
+  window.__foxessSolarState = {
+    value,
+    unit,
+  };
+
+  createVerticalProgressBar(percent);
+  return percent;
 }
 
 /**
