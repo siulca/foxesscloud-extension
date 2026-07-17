@@ -110,6 +110,24 @@ export function renderSankeyFromData(energyData) {
   if (discharged > 0)
     links.push({ source: "Discharged", target: "Consumed", value: discharged });
 
+  // Scale links so that incoming sums for each target match the
+  // corresponding `nodeDisplayValues` when available. This prevents the
+  // right-hand node heights (which are based on link sums) from being
+  // inflated compared to the displayed node values.
+  const targetBaseSums = {};
+  links.forEach((l) => {
+    targetBaseSums[l.target] = (targetBaseSums[l.target] || 0) + l.value;
+  });
+
+  links.forEach((l) => {
+    const desired = nodeDisplayValues[l.target];
+    const base = targetBaseSums[l.target] || 0;
+    if (desired > 0 && base > 0) {
+      const scale = desired / base;
+      l.value = l.value * scale;
+    }
+  });
+
   // Only include nodes with actual flow
   const activeNodeNames = new Set();
   links.forEach((link) => {
@@ -129,6 +147,16 @@ export function renderSankeyFromData(energyData) {
   // aggregated link totals which can double-count flows.
   const grandTotal =
     Object.values(nodeDisplayValues).reduce((a, b) => a + b, 0) || 1;
+
+  // Compute supply/demand side totals now that nodeDisplayValues exists.
+  const supplyTotal =
+    (nodeDisplayValues.Imported || 0) +
+      (nodeDisplayValues.Solar || 0) +
+      (nodeDisplayValues.Discharged || 0) || 1;
+  const demandTotal =
+    (nodeDisplayValues.Consumed || 0) +
+      (nodeDisplayValues.Exported || 0) +
+      (nodeDisplayValues.Charged || 0) || 1;
 
   // ====================== ACTIVE NODES WITH FULL LABELS ======================
   const activeNodes = Array.from(activeNodeNames).map((name) => ({
@@ -184,7 +212,11 @@ export function renderSankeyFromData(energyData) {
             return `${params.data.source} → ${params.data.target}<br/>${params.data.value.toFixed(2)} ${displayUnit} (${percent}%)`;
           }
           const value = nodeDisplayValues[params.name] || 0;
-          const percent = ((value / Math.max(grandTotal, 1)) * 100).toFixed(1);
+          const isSupply = ["Imported", "Solar", "Discharged"].includes(
+            params.name,
+          );
+          const base = isSupply ? supplyTotal : demandTotal;
+          const percent = ((value / Math.max(base, 1)) * 100).toFixed(1);
           return `${params.name}<br/>${value.toFixed(2)} ${displayUnit} (${percent}%)`;
         },
       },
