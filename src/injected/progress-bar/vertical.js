@@ -16,9 +16,8 @@ function updateGaugeLabel(percent = 0) {
   // Compute position relative to the wrapper so the marker remains inside
   // the vertical bar DOM and follows the fill.
   const wrapRect = wrapper.getBoundingClientRect();
-  const relY = (1 - clamped / 100) * wrapRect.height;
-  marker.style.top = `${relY}px`;
-  // marker.style.left = `-100px`;
+  // Position using percentage so 100% maps to top and 0% to bottom of wrapper.
+  marker.style.top = `${100 - clamped}%`;
 }
 
 function updateCapacityDisplay() {
@@ -118,7 +117,7 @@ export function createVerticalProgressBar(percent = 0) {
         width: 68px;
         text-align: right;
         pointer-events: none;
-        transform: translateY(-90%);
+        transform: translateY(-80%);
         font-weight: bold;
         z-index: 20;
       `;
