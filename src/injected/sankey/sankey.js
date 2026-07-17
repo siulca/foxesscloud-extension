@@ -68,6 +68,20 @@ export function renderSankeyFromData(energyData) {
   );
 
   const displayUnit = "kWh";
+  // Compute a Solar total that reflects actual PV generation reported by the app.
+  // PV generation is the portion self-consumed plus exported to grid. Exclude
+  // the raw `charged` number here because `charged` can include energy
+  // transferred from the grid into the battery and would double-count PV.
+  const solarTotal = (pvSelfConsumption || 0) + (exported || 0);
+
+  const nodeDisplayValues = {
+    Imported: imported,
+    Solar: solarTotal,
+    Discharged: discharged,
+    Exported: exported,
+    Consumed: consumed,
+    Charged: charged,
+  };
 
   // ====================== NODE CONFIG ======================
   const nodeConfig = {
@@ -110,8 +124,11 @@ export function renderSankeyFromData(energyData) {
     nodeTotals[link.target] = (nodeTotals[link.target] || 0) + link.value;
   });
 
+  // For percentage calculations we prefer to base the grand total on the
+  // explicit node display values (direct source values) instead of the
+  // aggregated link totals which can double-count flows.
   const grandTotal =
-    Object.values(nodeTotals).reduce((a, b) => a + b, 0) / 2 || 1;
+    Object.values(nodeDisplayValues).reduce((a, b) => a + b, 0) || 1;
 
   // ====================== ACTIVE NODES WITH FULL LABELS ======================
   const activeNodes = Array.from(activeNodeNames).map((name) => ({
@@ -136,10 +153,9 @@ export function renderSankeyFromData(energyData) {
       borderWidth: 1,
       borderColor: "rgba(0,0,0,0.25)",
       formatter: function (params) {
-        const total = nodeTotals[params.name] || 0;
-        if (total > 0 && grandTotal > 0) {
-          const percent = ((total / grandTotal) * 100).toFixed(1);
-          return `${params.name}\n${percent}%`;
+        const value = nodeDisplayValues[params.name] || 0;
+        if (value > 0) {
+          return `${params.name}\n${value.toFixed(2)} ${displayUnit}`;
         }
         return params.name;
       },
@@ -167,9 +183,9 @@ export function renderSankeyFromData(energyData) {
             );
             return `${params.data.source} → ${params.data.target}<br/>${params.data.value.toFixed(2)} ${displayUnit} (${percent}%)`;
           }
-          const total = nodeTotals[params.name] || 0;
-          const percent = ((total / grandTotal) * 100).toFixed(1);
-          return `${params.name}<br/>${total.toFixed(2)} ${displayUnit} (${percent}%)`;
+          const value = nodeDisplayValues[params.name] || 0;
+          const percent = ((value / Math.max(grandTotal, 1)) * 100).toFixed(1);
+          return `${params.name}<br/>${value.toFixed(2)} ${displayUnit} (${percent}%)`;
         },
       },
       series: [
