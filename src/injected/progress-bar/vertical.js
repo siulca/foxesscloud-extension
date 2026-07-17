@@ -4,11 +4,29 @@
  * @returns {HTMLElement|null}
  */
 function updateGaugeLabel(percent = 0) {
+  // Update the percent marker positioned alongside the bar using fixed
+  // viewport coordinates computed from the wrapper's bounding box.
+  const marker = document.getElementById("solar-percent-marker");
+  const wrapper = document.getElementById("vertical-progress-bar");
+  if (!marker || !wrapper) return;
+
+  const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+  marker.innerHTML = `<b>${clamped.toFixed(1)}</b> %`;
+
+  // Compute position relative to the wrapper so the marker remains inside
+  // the vertical bar DOM and follows the fill.
+  const wrapRect = wrapper.getBoundingClientRect();
+  const relY = (1 - clamped / 100) * wrapRect.height;
+  marker.style.top = `${relY}px`;
+  // marker.style.left = `-100px`;
+}
+
+function updateCapacityDisplay() {
   const label = document.getElementById("solar-gauge-label");
   if (!label) return;
-
   const capacity = Number(window.pvCapacity ?? 0);
-  label.innerHTML = `<b>${Number.isFinite(capacity) ? capacity.toFixed(1) : "0.0"}</b> kW<br/></br/></br><br/><b>${percent.toFixed(1)}</b> %`;
+  const capText = `${Number.isFinite(capacity) ? capacity.toFixed(1) : "0.0"} kW`;
+  label.innerHTML = capText;
 }
 
 export function createVerticalProgressBar(percent = 0) {
@@ -26,31 +44,27 @@ export function createVerticalProgressBar(percent = 0) {
     progressWrapper = document.createElement("div");
     progressWrapper.id = "vertical-progress-bar";
     progressWrapper.style.cssText = `
-            position: absolute;
-            width: 14px;
-            height: 80px;
-            background: #4d4d4e;
-            border: 2px solid #000;
-            border-radius: 9999px;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
-            z-index: 10;
-            left: -23px;
-            top: 38px;
-            transform: translateY(-50%);
-        `;
+        position: absolute;
+        width: 14px;
+        height: 80px;
+        background: #4d4d4e;
+        border: 2px solid #000;
+        border-radius: 9999px;
+        overflow: visible;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+        z-index: 10;
+        left: -23px;
+        top: 38px;
+        transform: translateY(-50%);
+      `;
     const capacityKw = document.createElement("div");
     capacityKw.id = "solar-gauge-label";
     capacityKw.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: -100px;
-            width: 68px;
-            font-size: 14px;
-            line-height: 1;
-            pointer-events: none;
-            text-align: right;
-        `;
+        font-size: 12px;
+        color: var(--color-text-label);
+        line-height: 1;
+        pointer-events: none;
+      `;
 
     // Inner fill bar
     const fill = document.createElement("div");
@@ -92,11 +106,36 @@ export function createVerticalProgressBar(percent = 0) {
             `;
       ticks.appendChild(tick);
     });
+    // Percentage marker element. We'll position it using viewport coords so
+    // it won't be clipped by the wrapper's overflow.
+    const percentMarker = document.createElement("div");
+    percentMarker.id = "solar-percent-marker";
+    // Position marker absolutely relative to the progress wrapper so it stays
+    // visually grouped with the bar but outside the rounded clip area.
+    percentMarker.style.cssText = `
+        position: absolute;
+        left: -80px;
+        width: 68px;
+        text-align: right;
+        pointer-events: none;
+        transform: translateY(-90%);
+        font-weight: bold;
+        z-index: 20;
+      `;
 
     progressWrapper.appendChild(fill);
     progressWrapper.appendChild(ticks);
+    progressWrapper.appendChild(percentMarker);
     container.appendChild(progressWrapper);
-    container.appendChild(capacityKw);
+
+    // Attach capacity display to the solar tip box if present, otherwise
+    // fall back to placing it next to the progress bar.
+    const solarTip = document.querySelector(".tip_common.tip_solar");
+    if (solarTip) {
+      solarTip.appendChild(capacityKw);
+    } else {
+      container.appendChild(capacityKw);
+    }
   }
 
   // Update fill height
@@ -107,6 +146,9 @@ export function createVerticalProgressBar(percent = 0) {
   }
 
   updateGaugeLabel(percent);
+
+  // Ensure capacity number is shown/updated in its (new) location.
+  updateCapacityDisplay();
 
   return progressWrapper;
 }
