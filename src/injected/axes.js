@@ -53,7 +53,9 @@
 
   function applyToAll() {
     // target obvious chart containers
-    const containers = Array.from(document.querySelectorAll(".echart")).concat(
+    const containers = Array.from(
+      document.querySelectorAll(".infoItemContentSide .echart"),
+    ).concat(
       Array.from(document.querySelectorAll(".infoItemContentSide .echart")),
     );
     containers.forEach((el) => applyOverlayTo(el));
