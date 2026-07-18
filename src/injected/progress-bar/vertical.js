@@ -5,6 +5,12 @@ const HISTORY_GRAPH_HEIGHT = 80;
 const GAUGE_LINE_COLOR = "rgb(0,205,212)";
 let solarPercentHistory = [];
 
+const solarGaugeOptions = {
+  showCapacity: true,
+  showPercent: true,
+  showHistory: true,
+};
+
 /**
  * Creates / Updates a Vertical Progress Bar inside .fl_tips2
  * @param {number} percent - Value between 0 and 100
@@ -20,11 +26,25 @@ function updateGaugeLabel(percent = 0) {
   const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
   marker.innerHTML = `<b>${clamped.toFixed(1)}</b> %`;
 
-  // Compute position relative to the wrapper so the marker remains inside
-  // the vertical bar DOM and follows the fill.
-  const wrapRect = wrapper.getBoundingClientRect();
-  // Position using percentage so 100% maps to top and 0% to bottom of wrapper.
   marker.style.top = `${100 - clamped}%`;
+}
+
+function setSolarCapacityVisible(show) {
+  solarGaugeOptions.showCapacity = show;
+  const label = document.getElementById("solar-gauge-label");
+  if (label) label.style.display = show ? "" : "none";
+}
+
+function setSolarPercentLabelVisible(show) {
+  solarGaugeOptions.showPercent = show;
+  const marker = document.getElementById("solar-percent-marker");
+  if (marker) marker.style.display = show ? "" : "none";
+}
+
+function setSolarHistoryVisible(show) {
+  solarGaugeOptions.showHistory = show;
+  const historyWrapper = document.getElementById("solar-history-wrapper");
+  if (historyWrapper) historyWrapper.style.display = show ? "" : "none";
 }
 
 function ensureHistoryChart() {
@@ -275,4 +295,16 @@ export function toggleSolarGauge(show) {
   const display = show ? "" : "none";
   if (wrapper) wrapper.style.display = display;
   if (label) label.style.display = display;
+}
+
+export function toggleSolarCapacity(show) {
+  setSolarCapacityVisible(show);
+}
+
+export function toggleSolarPercentLabel(show) {
+  setSolarPercentLabelVisible(show);
+}
+
+export function toggleSolarHistory(show) {
+  setSolarHistoryVisible(show);
 }

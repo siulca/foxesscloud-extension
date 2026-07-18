@@ -17,6 +17,9 @@ import { showSankeyDiagram } from "./sankey/sankey.js";
 import {
   createVerticalProgressBar,
   toggleSolarGauge,
+  toggleSolarCapacity,
+  toggleSolarPercentLabel,
+  toggleSolarHistory,
 } from "./progress-bar/vertical.js";
 import { initializeWebSocketInterceptor } from "./websocket/ws.js";
 import { applyToAllCharts } from "./chart/unstack.js";
@@ -45,6 +48,18 @@ window.addEventListener("message", (event) => {
 
     case "SHOW_SOLAR_GAUGE":
       toggleSolarGauge(data.value);
+      break;
+
+    case "SHOW_SOLAR_CAPACITY":
+      toggleSolarCapacity(data.value);
+      break;
+
+    case "SHOW_SOLAR_PERCENT_LABEL":
+      toggleSolarPercentLabel(data.value);
+      break;
+
+    case "SHOW_SOLAR_HISTORY":
+      toggleSolarHistory(data.value);
       break;
 
     // Add more message types easily here:

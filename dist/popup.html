@@ -32,24 +32,49 @@
       />
       Show Sankey diagram
     </label>
-    <label class="checkbox-label">
-      <input
-        id="showSolarGauge"
-        type="checkbox"
-        checked
-        style="margin-right: 8px"
-      />
-      Show solar production gauge
-    </label>
-    <!-- <label class="checkbox-label">
-      <input
-        disabled
-        id="showBatteryEstimate"
-        type="checkbox"
-        style="margin-right: 8px"
-      />
-      Show battery time estimate
-    </label> -->
+    <div
+      style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd"
+    >
+      <strong>Solar production gauge</strong>
+      <label class="checkbox-label">
+        <input
+          id="showSolarGauge"
+          type="checkbox"
+          checked
+          style="margin-right: 8px"
+        />
+        Show solar production gauge
+      </label>
+      <div style="margin-left: 12px">
+        <label class="checkbox-label">
+          <input
+            id="showSolarCapacity"
+            type="checkbox"
+            checked
+            style="margin-right: 8px"
+          />
+          Total capacity
+        </label>
+        <label class="checkbox-label">
+          <input
+            id="showSolarPercent"
+            type="checkbox"
+            checked
+            style="margin-right: 8px"
+          />
+          Percent label
+        </label>
+        <label class="checkbox-label">
+          <input
+            id="showSolarHistory"
+            type="checkbox"
+            checked
+            style="margin-right: 8px"
+          />
+          1min history graph
+        </label>
+      </div>
+    </div>
 
     <script src="popup.js"></script>
   </body>
