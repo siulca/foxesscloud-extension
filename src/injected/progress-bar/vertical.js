@@ -1,3 +1,10 @@
+const HISTORY_LIMIT = 12;
+const HISTORY_POINT_SPACING = 10;
+const HISTORY_GRAPH_WIDTH = (HISTORY_LIMIT - 1) * HISTORY_POINT_SPACING;
+const HISTORY_GRAPH_HEIGHT = 80;
+const GAUGE_LINE_COLOR = "rgb(0,205,212)";
+let solarPercentHistory = [];
+
 /**
  * Creates / Updates a Vertical Progress Bar inside .fl_tips2
  * @param {number} percent - Value between 0 and 100
@@ -18,6 +25,88 @@ function updateGaugeLabel(percent = 0) {
   const wrapRect = wrapper.getBoundingClientRect();
   // Position using percentage so 100% maps to top and 0% to bottom of wrapper.
   marker.style.top = `${100 - clamped}%`;
+}
+
+function ensureHistoryChart() {
+  const wrapper = document.getElementById("vertical-progress-bar");
+  if (!wrapper) return;
+
+  let historyWrapper = document.getElementById("solar-history-wrapper");
+  if (historyWrapper) return;
+
+  historyWrapper = document.createElement("div");
+  historyWrapper.id = "solar-history-wrapper";
+  historyWrapper.style.cssText = `
+      position: absolute;
+      left: -${HISTORY_GRAPH_WIDTH + 15}px;
+      top: 0;
+      width: ${HISTORY_GRAPH_WIDTH}px;
+      height: ${HISTORY_GRAPH_HEIGHT}px;
+      pointer-events: none;
+    `;
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.id = "solar-history-svg";
+  svg.setAttribute(
+    "viewBox",
+    `0 0 ${HISTORY_GRAPH_WIDTH} ${HISTORY_GRAPH_HEIGHT}`,
+  );
+  svg.style.cssText = `
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    `;
+
+  historyWrapper.appendChild(svg);
+  wrapper.appendChild(historyWrapper);
+}
+
+function renderHistoryChart() {
+  const svg = document.getElementById("solar-history-svg");
+  if (!svg) return;
+
+  const values = solarPercentHistory.slice(-HISTORY_LIMIT);
+  if (values.length < 2) {
+    svg.innerHTML = "";
+    return;
+  }
+
+  const pointCount = values.length;
+  const startX = HISTORY_GRAPH_WIDTH - (pointCount - 1) * HISTORY_POINT_SPACING;
+  const points = values
+    .map((value, index) => {
+      const x = startX + index * HISTORY_POINT_SPACING;
+      const y = HISTORY_GRAPH_HEIGHT - (value / 100) * HISTORY_GRAPH_HEIGHT;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  const lastValue = values[values.length - 1];
+  const lastX = startX + (values.length - 1) * HISTORY_POINT_SPACING;
+  const lastY = HISTORY_GRAPH_HEIGHT - (lastValue / 100) * HISTORY_GRAPH_HEIGHT;
+  const arrowPoints = `${lastX + 6},${lastY} ${lastX - 1},${lastY - 4} ${lastX - 1},${lastY + 4}`;
+
+  svg.innerHTML = `
+      <polyline
+        points="${points}"
+        fill="none"
+        stroke="${GAUGE_LINE_COLOR}"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <polygon
+        points="${arrowPoints}"
+        fill="${GAUGE_LINE_COLOR}"
+      />
+    `;
+}
+
+function addHistoryPoint(percent) {
+  const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+  solarPercentHistory.push(clamped);
+  if (solarPercentHistory.length > HISTORY_LIMIT) solarPercentHistory.shift();
+  renderHistoryChart();
 }
 
 function updateCapacityDisplay() {
@@ -117,7 +206,7 @@ export function createVerticalProgressBar(percent = 0) {
         width: 68px;
         text-align: right;
         pointer-events: none;
-        transform: translateY(-80%);
+        transform: translateY(-110%);
         font-weight: bold;
         z-index: 20;
       `;
@@ -126,6 +215,7 @@ export function createVerticalProgressBar(percent = 0) {
     progressWrapper.appendChild(ticks);
     progressWrapper.appendChild(percentMarker);
     container.appendChild(progressWrapper);
+    ensureHistoryChart();
 
     // Attach capacity display to the solar tip box if present, otherwise
     // fall back to placing it next to the progress bar.
@@ -137,6 +227,9 @@ export function createVerticalProgressBar(percent = 0) {
     }
   }
 
+  // Ensure history chart container exists inside the wrapper.
+  ensureHistoryChart();
+
   // Update fill height
   const fill = document.getElementById("progress-fill");
   if (fill) {
@@ -145,6 +238,7 @@ export function createVerticalProgressBar(percent = 0) {
   }
 
   updateGaugeLabel(percent);
+  addHistoryPoint(percent);
 
   // Ensure capacity number is shown/updated in its (new) location.
   updateCapacityDisplay();
