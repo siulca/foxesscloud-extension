@@ -29,6 +29,30 @@ import "./interceptor/api.js";
 // Add lightweight axes + guide lines for simple echarts instances
 import "./axes.js";
 
+function toggleOpenTabsVisibility(show) {
+  document
+    .querySelectorAll(
+      `.tab-wrap, .overviewTitle, .cookie-consent-wrapper, .backv1-btn`,
+    )
+    .forEach((el) => {
+      el.style.display = show ? "none" : "";
+    });
+
+  // remove the grey bar at the bottom of the overview page
+  document.querySelectorAll(".overview").forEach((el) => {
+    el.style.height = show ? "100%" : "calc(100% - 75px)";
+    el.style.paddingTop = show ? "20px" : undefined;
+    el.style.paddingBottom = show ? "20px" : undefined;
+  });
+
+  const overviewRightWrap = document.querySelector(
+    ".overview .overviewContent .overviewRight",
+  );
+  if (overviewRightWrap) {
+    overviewRightWrap.style.flex = show ? "5" : "7";
+  }
+}
+
 // ==================== Message Handler ====================
 window.addEventListener("message", (event) => {
   // Security check - only accept messages from our extension
@@ -44,6 +68,11 @@ window.addEventListener("message", (event) => {
 
     case "SHOW_SANKEY":
       showSankeyDiagram(data.value);
+      break;
+
+    case "HIDE_OPEN_TABS":
+      state.hideOpenTabs = data.value;
+      toggleOpenTabsVisibility(state.hideOpenTabs);
       break;
 
     case "SHOW_SOLAR_GAUGE":
@@ -75,6 +104,7 @@ window.addEventListener("message", (event) => {
 // ====================== VERTICAL PROGRESS BAR + WS ======================
 function start() {
   createVerticalProgressBar(0);
+  toggleOpenTabsVisibility(state.hideOpenTabs);
   initializeWebSocketInterceptor();
 }
 

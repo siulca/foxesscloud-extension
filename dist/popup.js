@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const unstackCharts = document.getElementById("unstackCharts");
+  const hideOpenTabs = document.getElementById("hideOpenTabs");
   const showSankey = document.getElementById("showSankey");
   const showSolarGauge = document.getElementById("showSolarGauge");
   const showSolarCapacity = document.getElementById("showSolarCapacity");
@@ -33,6 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
 
   sendToInjected("SET_UNSTACKED", !unstackCharts.checked);
+  sendToInjected("HIDE_OPEN_TABS", hideOpenTabs.checked);
   sendToInjected("SHOW_SOLAR_GAUGE", showSolarGauge.checked);
   sendToInjected("SHOW_SOLAR_CAPACITY", showSolarCapacity.checked);
   sendToInjected("SHOW_SOLAR_PERCENT_LABEL", showSolarPercent.checked);
@@ -40,6 +42,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   unstackCharts.addEventListener("change", (e) => {
     sendToInjected("SET_UNSTACKED", !e.target.checked);
+  });
+
+  hideOpenTabs.addEventListener("change", (e) => {
+    sendToInjected("HIDE_OPEN_TABS", e.target.checked);
   });
 
   showSankey.addEventListener("change", (e) => {
