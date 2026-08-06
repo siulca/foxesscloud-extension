@@ -11,6 +11,175 @@ const solarGaugeOptions = {
   showHistory: true,
 };
 
+const batteryEstimateOptions = {
+  showEstimate: true,
+  capacityKwh:
+    Number(
+      window.__foxessBatteryCapacity ??
+        parseFloat(localStorage.getItem("foxess_battery_capacity") || "0"),
+    ) || 0,
+};
+
+function formatDuration(hours) {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+
+  if (h > 0) {
+    return `${h}h${m > 0 ? ` ${m}m` : ""}`;
+  }
+
+  return `${m}m`;
+}
+
+function parseBatteryPower() {
+  const batteryTip = document.querySelector(".tip_bat .tip_value_box");
+  if (!batteryTip) return null;
+
+  const text = batteryTip.textContent?.trim() || "";
+  const match = text.match(/([-+]?\d+(?:[.,]\d+)?)\s*([kK]?W)\b/);
+  if (!match) return null;
+
+  const [, rawValue, rawUnit] = match;
+  const powerValue = parseFloat(rawValue.replace(",", "."));
+  if (!Number.isFinite(powerValue)) return null;
+
+  const unit = rawUnit.toLowerCase();
+  const valueKw = unit === "kw" ? powerValue : powerValue / 1000;
+  return {
+    valueKw,
+    rawValue: powerValue,
+    rawUnit: rawUnit.toUpperCase(),
+  };
+}
+
+function parseBatteryStateOfCharge() {
+  const batteryTip = document.querySelector(".tip_bat .tip_value_box");
+  if (!batteryTip) return null;
+
+  const rawText = batteryTip.textContent?.trim() || "";
+  const cleaned = rawText.replace(/%/g, "").trim();
+  const matches = [...cleaned.matchAll(/([-+]?[0-9]+(?:[.,][0-9]+)?)/g)];
+  if (!matches.length) return null;
+
+  const socValue = parseFloat(matches[matches.length - 1][1].replace(",", "."));
+  if (!Number.isFinite(socValue)) return null;
+
+  return Math.max(0, Math.min(100, socValue));
+}
+
+function updateBatteryEstimateDisplay() {
+  const label = document.getElementById("battery-estimate-label");
+  if (!label) return;
+
+  if (!batteryEstimateOptions.showEstimate) {
+    label.style.display = "none";
+    return;
+  }
+
+  let capacity = Number(batteryEstimateOptions.capacityKwh) || 0;
+  const showEstimate = batteryEstimateOptions.showEstimate;
+  const batteryPower = parseBatteryPower();
+  const socPercent = parseBatteryStateOfCharge();
+  const powerKw = batteryPower?.valueKw;
+
+  if (!Number.isFinite(capacity) || capacity <= 0) {
+    const storedCapacity = parseFloat(
+      localStorage.getItem("foxess_battery_capacity") || "0",
+    );
+    if (Number.isFinite(storedCapacity) && storedCapacity > 0) {
+      capacity = storedCapacity;
+      console.log("[FoxESS] using fallback stored capacity", capacity);
+    }
+  }
+
+  const energyRemaining = Number.isFinite(socPercent)
+    ? capacity * (powerKw > 0 ? (100 - socPercent) / 100 : socPercent / 100)
+    : capacity;
+  const energyAtSoc = Number.isFinite(socPercent)
+    ? capacity * (socPercent / 100)
+    : null;
+  const energyText = Number.isFinite(socPercent)
+    ? powerKw > 0
+      ? ` (${energyRemaining.toFixed(1)} kWh to full)`
+      : ` (${energyAtSoc.toFixed(1)} kWh available)`
+    : "";
+
+  console.log("[FoxESS] Battery estimate debug:", {
+    showEstimate,
+    capacity,
+    socPercent,
+    powerKw,
+    rawPowerValue: batteryPower?.rawValue,
+    rawPowerUnit: batteryPower?.rawUnit,
+    energyRemaining,
+    energyAtSoc,
+  });
+
+  if (
+    !Number.isFinite(capacity) ||
+    capacity <= 0 ||
+    !batteryPower ||
+    !Number.isFinite(powerKw) ||
+    powerKw === 0
+  ) {
+    if (!Number.isFinite(capacity) || capacity <= 0) {
+      console.log("[FoxESS] estimate unavailable because capacity is not set");
+    }
+    if (!batteryPower) {
+      console.log(
+        "[FoxESS] estimate unavailable because battery power could not be parsed",
+      );
+    }
+    if (Number.isFinite(powerKw) && powerKw === 0) {
+      console.log(
+        "[FoxESS] estimate unavailable because battery power is zero",
+      );
+    }
+    label.innerHTML = "Battery estimate unavailable";
+    label.style.display = "";
+    return;
+  }
+
+  if (Number.isFinite(socPercent) && energyRemaining <= 0) {
+    label.innerHTML =
+      powerKw > 0 ? "Battery already full" : "Battery already empty";
+    label.style.display = "";
+    return;
+  }
+
+  const direction = powerKw > 0 ? "full" : "empty";
+  const duration = energyRemaining / Math.abs(powerKw);
+
+  label.innerHTML = `~${formatDuration(duration)} until ${direction}<br/>${energyText}`;
+  label.style.display = "";
+}
+
+export function setBatteryCapacity(value) {
+  const capacity = Number(value) || 0;
+  batteryEstimateOptions.capacityKwh = capacity;
+  window.__foxessBatteryCapacity = capacity;
+
+  if (capacity > 0) {
+    try {
+      localStorage.setItem("foxess_battery_capacity", String(capacity));
+    } catch (err) {
+      console.warn(
+        "[FoxESS] failed to save battery capacity to page localStorage",
+        err,
+      );
+    }
+  }
+
+  console.log("[FoxESS] setBatteryCapacity:", capacity);
+  updateBatteryEstimateDisplay();
+}
+
+export function toggleBatteryEstimate(show) {
+  batteryEstimateOptions.showEstimate = show;
+  updateBatteryEstimateDisplay();
+}
+
 /**
  * Creates / Updates a Vertical Progress Bar inside .fl_tips2
  * @param {number} percent - Value between 0 and 100
@@ -127,6 +296,84 @@ function addHistoryPoint(percent) {
   solarPercentHistory.push(clamped);
   if (solarPercentHistory.length > HISTORY_LIMIT) solarPercentHistory.shift();
   renderHistoryChart();
+}
+
+let batteryEstimateObserver = null;
+
+function ensureBatteryEstimateLabel() {
+  const batteryTipRoot = document.querySelector(".tip_bat");
+  let label = document.getElementById("battery-estimate-label");
+
+  if (!label) {
+    label = document.createElement("div");
+    label.id = "battery-estimate-label";
+    label.style.cssText = `
+        display: block;
+        width: 100%;
+        flex-basis: 100%;
+        clear: both;
+        font-size: 12px;
+        color: var(--color-text-label);
+        line-height: 1.2;
+        pointer-events: none;
+        margin-top: 4px;
+      `;
+  }
+
+  if (batteryTipRoot && label.parentElement !== batteryTipRoot) {
+    batteryTipRoot.appendChild(label);
+  } else if (!batteryTipRoot && !label.parentElement) {
+    const container = document.querySelector(".fl_tips2");
+    if (container) {
+      container.appendChild(label);
+    }
+  }
+
+  return label;
+}
+
+function observeBatteryTipElement(batteryTip) {
+  if (batteryEstimateObserver) {
+    batteryEstimateObserver.disconnect();
+  }
+
+  batteryEstimateObserver = new MutationObserver(() => {
+    updateBatteryEstimateDisplay();
+  });
+
+  batteryEstimateObserver.observe(batteryTip, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+}
+
+function watchBatteryTipChanges() {
+  const batteryTipRoot = document.querySelector(".tip_bat");
+  if (!batteryTipRoot) return;
+
+  const batteryTip = document.querySelector(".tip_bat .tip_value_box");
+  if (batteryTip) {
+    observeBatteryTipElement(batteryTip);
+    return;
+  }
+
+  if (batteryEstimateObserver) {
+    batteryEstimateObserver.disconnect();
+  }
+
+  batteryEstimateObserver = new MutationObserver(() => {
+    const batteryTipBox = document.querySelector(".tip_bat .tip_value_box");
+    if (batteryTipBox) {
+      observeBatteryTipElement(batteryTipBox);
+      updateBatteryEstimateDisplay();
+    }
+  });
+
+  batteryEstimateObserver.observe(batteryTipRoot, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 function updateCapacityDisplay() {
@@ -249,6 +496,7 @@ export function createVerticalProgressBar(percent = 0) {
 
   // Ensure history chart container exists inside the wrapper.
   ensureHistoryChart();
+  ensureBatteryEstimateLabel();
 
   // Update fill height
   const fill = document.getElementById("progress-fill");
@@ -260,8 +508,10 @@ export function createVerticalProgressBar(percent = 0) {
   updateGaugeLabel(percent);
   addHistoryPoint(percent);
 
-  // Ensure capacity number is shown/updated in its (new) location.
+  // Ensure capacity number and battery estimate are shown/updated in their locations.
   updateCapacityDisplay();
+  updateBatteryEstimateDisplay();
+  watchBatteryTipChanges();
 
   return progressWrapper;
 }

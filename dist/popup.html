@@ -84,6 +84,37 @@
         </label>
       </div>
     </div>
+    <div
+      style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd"
+    >
+      <strong>Battery estimate</strong>
+      <div class="checkbox-label">
+        <label>
+          <input
+            id="showBatteryEstimate"
+            type="checkbox"
+            checked
+            style="margin-right: 8px"
+          />
+          Show battery estimate
+        </label>
+      </div>
+      <div style="margin-left: 12px; margin-top: 8px">
+        <div class="checkbox-label" style="display: block">
+          <label style="display: flex; align-items: center; gap: 8px">
+            <span>Max battery capacity (kWh)</span>
+            <input
+              id="batteryCapacityKwh"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="kWh"
+              style="width: 80px"
+            />
+          </label>
+        </div>
+      </div>
+    </div>
 
     <script src="popup.js"></script>
   </body>

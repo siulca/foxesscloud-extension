@@ -20,6 +20,8 @@ import {
   toggleSolarCapacity,
   toggleSolarPercentLabel,
   toggleSolarHistory,
+  toggleBatteryEstimate,
+  setBatteryCapacity,
 } from "./progress-bar/vertical.js";
 import { initializeWebSocketInterceptor } from "./websocket/ws.js";
 import { applyToAllCharts } from "./chart/unstack.js";
@@ -59,6 +61,7 @@ window.addEventListener("message", (event) => {
   if (event.data?.source !== "foxesscloud-extension") return;
 
   const data = event.data;
+  console.log("[FoxESS] message:", data.type, data.value);
 
   switch (data.type) {
     case "SET_UNSTACKED":
@@ -91,10 +94,15 @@ window.addEventListener("message", (event) => {
       toggleSolarHistory(data.value);
       break;
 
+    case "SHOW_BATTERY_ESTIMATE":
+      toggleBatteryEstimate(data.value);
+      break;
+
+    case "SET_BATTERY_CAPACITY":
+      setBatteryCapacity(data.value);
+      break;
+
     // Add more message types easily here:
-    // case "SHOW_BATTERY_ESTIMATE":
-    //   toggleBatteryEstimate(data.value);
-    //   break;
 
     default:
       console.warn("Unknown message type:", data.type);
