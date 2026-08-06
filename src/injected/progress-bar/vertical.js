@@ -133,7 +133,7 @@ function updateCapacityDisplay() {
   const label = document.getElementById("solar-gauge-label");
   if (!label) return;
   const capacity = Number(window.pvCapacity ?? 0);
-  const capText = `${Number.isFinite(capacity) ? capacity.toFixed(1) : "0.0"} kW`;
+  const capText = `${Number.isFinite(capacity) ? capacity.toFixed(3) : "0.0"} kW`;
   label.innerHTML = capText;
 }
 
