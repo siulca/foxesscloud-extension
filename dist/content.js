@@ -13,7 +13,6 @@
     chrome.storage.local.get(
       ["showBatteryEstimate", "batteryCapacityKwh"],
       (stored) => {
-        console.log("[FoxESS] restoreBatterySettings:", stored);
         const storedCapacity = parseFloat(stored.batteryCapacityKwh);
         const fallbackCapacity = parseFloat(
           localStorage.getItem("foxess_battery_capacity") || "0",
@@ -29,21 +28,6 @@
           localStorage.setItem("foxess_battery_capacity", String(capacity));
         }
 
-        if (
-          Number.isFinite(storedCapacity) &&
-          storedCapacity > 0 &&
-          storedCapacity !== capacity
-        ) {
-          console.log(
-            "[FoxESS] restoreBatterySettings using stored capacity from page localStorage:",
-            capacity,
-          );
-        }
-
-        console.log(
-          "[FoxESS] restoreBatterySettings sending capacity:",
-          capacity,
-        );
         sendMessageToPage({
           source: "foxesscloud-extension",
           type: "SHOW_BATTERY_ESTIMATE",

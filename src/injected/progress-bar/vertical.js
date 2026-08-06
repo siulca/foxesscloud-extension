@@ -68,6 +68,23 @@ function parseBatteryStateOfCharge() {
   return Math.max(0, Math.min(100, socValue));
 }
 
+function parseBatteryFlowStatus() {
+  const batteryTip = document.querySelector(".tip_bat .tip_value_box");
+  if (!batteryTip) return null;
+
+  const batteryTipRoot = batteryTip.closest(".tip_bat");
+  if (!batteryTipRoot) return null;
+
+  const statusNode = batteryTipRoot.firstElementChild;
+  if (!statusNode) return null;
+
+  const statusText = statusNode.textContent?.trim() || "";
+  if (statusText.includes("Charging")) return "charging";
+  if (statusText.includes("Discharging")) return "discharging";
+
+  return null;
+}
+
 function updateBatteryEstimateDisplay() {
   const label = document.getElementById("battery-estimate-label");
   if (!label) return;
@@ -81,6 +98,7 @@ function updateBatteryEstimateDisplay() {
   const showEstimate = batteryEstimateOptions.showEstimate;
   const batteryPower = parseBatteryPower();
   const socPercent = parseBatteryStateOfCharge();
+  const batteryFlowStatus = parseBatteryFlowStatus();
   const powerKw = batteryPower?.valueKw;
 
   if (!Number.isFinite(capacity) || capacity <= 0) {
@@ -89,32 +107,26 @@ function updateBatteryEstimateDisplay() {
     );
     if (Number.isFinite(storedCapacity) && storedCapacity > 0) {
       capacity = storedCapacity;
-      console.log("[FoxESS] using fallback stored capacity", capacity);
     }
   }
 
+  const isCharging =
+    batteryFlowStatus === "charging"
+      ? true
+      : batteryFlowStatus === "discharging"
+        ? false
+        : powerKw > 0;
   const energyRemaining = Number.isFinite(socPercent)
-    ? capacity * (powerKw > 0 ? (100 - socPercent) / 100 : socPercent / 100)
+    ? capacity * (isCharging ? (100 - socPercent) / 100 : socPercent / 100)
     : capacity;
   const energyAtSoc = Number.isFinite(socPercent)
     ? capacity * (socPercent / 100)
     : null;
   const energyText = Number.isFinite(socPercent)
-    ? powerKw > 0
+    ? isCharging
       ? ` (${energyRemaining.toFixed(1)} kWh to full)`
       : ` (${energyAtSoc.toFixed(1)} kWh available)`
     : "";
-
-  console.log("[FoxESS] Battery estimate debug:", {
-    showEstimate,
-    capacity,
-    socPercent,
-    powerKw,
-    rawPowerValue: batteryPower?.rawValue,
-    rawPowerUnit: batteryPower?.rawUnit,
-    energyRemaining,
-    energyAtSoc,
-  });
 
   if (
     !Number.isFinite(capacity) ||
@@ -123,36 +135,30 @@ function updateBatteryEstimateDisplay() {
     !Number.isFinite(powerKw) ||
     powerKw === 0
   ) {
-    if (!Number.isFinite(capacity) || capacity <= 0) {
-      console.log("[FoxESS] estimate unavailable because capacity is not set");
-    }
-    if (!batteryPower) {
-      console.log(
-        "[FoxESS] estimate unavailable because battery power could not be parsed",
-      );
-    }
-    if (Number.isFinite(powerKw) && powerKw === 0) {
-      console.log(
-        "[FoxESS] estimate unavailable because battery power is zero",
-      );
-    }
     label.innerHTML = "Battery estimate unavailable";
     label.style.display = "";
     return;
   }
 
   if (Number.isFinite(socPercent) && energyRemaining <= 0) {
-    label.innerHTML =
-      powerKw > 0 ? "Battery already full" : "Battery already empty";
+    label.innerHTML = isCharging
+      ? "Battery already full"
+      : "Battery already empty";
     label.style.display = "";
     return;
   }
 
-  const direction = powerKw > 0 ? "full" : "empty";
+  const direction = isCharging ? "full" : "empty";
   const duration = energyRemaining / Math.abs(powerKw);
 
   label.innerHTML = `~${formatDuration(duration)} until ${direction}<br/>${energyText}`;
   label.style.display = "";
+}
+
+function updateFlowDotWidth(show) {
+  document.querySelectorAll(".power_flow .flow_dot .fl_tips4").forEach((el) => {
+    el.style.width = show ? "160px" : "";
+  });
 }
 
 export function setBatteryCapacity(value) {
@@ -171,12 +177,12 @@ export function setBatteryCapacity(value) {
     }
   }
 
-  console.log("[FoxESS] setBatteryCapacity:", capacity);
   updateBatteryEstimateDisplay();
 }
 
 export function toggleBatteryEstimate(show) {
   batteryEstimateOptions.showEstimate = show;
+  updateFlowDotWidth(show);
   updateBatteryEstimateDisplay();
 }
 
@@ -511,6 +517,7 @@ export function createVerticalProgressBar(percent = 0) {
   // Ensure capacity number and battery estimate are shown/updated in their locations.
   updateCapacityDisplay();
   updateBatteryEstimateDisplay();
+  updateFlowDotWidth(batteryEstimateOptions.showEstimate);
   watchBatteryTipChanges();
 
   return progressWrapper;
