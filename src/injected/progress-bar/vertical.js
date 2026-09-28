@@ -8,7 +8,7 @@ let solarPercentHistory = [];
 const solarGaugeOptions = {
   showCapacity: true,
   showPercent: true,
-  showHistory: true,
+  showHistory: true
 };
 
 const batteryEstimateOptions = {
@@ -16,12 +16,14 @@ const batteryEstimateOptions = {
   capacityKwh:
     Number(
       window.__foxessBatteryCapacity ??
-        parseFloat(localStorage.getItem("foxess_battery_capacity") || "0"),
-    ) || 0,
+        parseFloat(localStorage.getItem("foxess_battery_capacity") || "0")
+    ) || 0
 };
 
 function formatDuration(hours) {
   const totalMinutes = Math.round(hours * 60);
+  if (totalMinutes === 0) return "<1m";
+
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
 
@@ -49,7 +51,7 @@ function parseBatteryPower() {
   return {
     valueKw,
     rawValue: powerValue,
-    rawUnit: rawUnit.toUpperCase(),
+    rawUnit: rawUnit.toUpperCase()
   };
 }
 
@@ -103,7 +105,7 @@ function updateBatteryEstimateDisplay() {
 
   if (!Number.isFinite(capacity) || capacity <= 0) {
     const storedCapacity = parseFloat(
-      localStorage.getItem("foxess_battery_capacity") || "0",
+      localStorage.getItem("foxess_battery_capacity") || "0"
     );
     if (Number.isFinite(storedCapacity) && storedCapacity > 0) {
       capacity = storedCapacity;
@@ -124,8 +126,8 @@ function updateBatteryEstimateDisplay() {
     : null;
   const energyText = Number.isFinite(socPercent)
     ? isCharging
-      ? ` (${energyRemaining.toFixed(1)} kWh to full)`
-      : ` (${energyAtSoc.toFixed(1)} kWh available)`
+      ? `: ${energyRemaining.toFixed(1)} kWh`
+      : `: ${energyAtSoc.toFixed(1)} kWh`
     : "";
 
   if (
@@ -150,8 +152,10 @@ function updateBatteryEstimateDisplay() {
 
   const direction = isCharging ? "full" : "empty";
   const duration = energyRemaining / Math.abs(powerKw);
+  const onePercentDuration = (capacity * 0.01) / Math.abs(powerKw);
+  const onePercentDirection = isCharging ? "charge" : "discharge";
 
-  label.innerHTML = `~${formatDuration(duration)} until ${direction}<br/>${energyText}`;
+  label.innerHTML = `~${formatDuration(duration)} until ${direction}${energyText}<br/>~${formatDuration(onePercentDuration)} per 1% ${onePercentDirection}`;
   label.style.display = "";
 }
 
@@ -172,7 +176,7 @@ export function setBatteryCapacity(value) {
     } catch (err) {
       console.warn(
         "[FoxESS] failed to save battery capacity to page localStorage",
-        err,
+        err
       );
     }
   }
@@ -244,7 +248,7 @@ function ensureHistoryChart() {
   svg.id = "solar-history-svg";
   svg.setAttribute(
     "viewBox",
-    `0 0 ${HISTORY_GRAPH_WIDTH} ${HISTORY_GRAPH_HEIGHT}`,
+    `0 0 ${HISTORY_GRAPH_WIDTH} ${HISTORY_GRAPH_HEIGHT}`
   );
   svg.style.cssText = `
       width: 100%;
@@ -350,7 +354,7 @@ function observeBatteryTipElement(batteryTip) {
   batteryEstimateObserver.observe(batteryTip, {
     childList: true,
     subtree: true,
-    characterData: true,
+    characterData: true
   });
 }
 
@@ -378,7 +382,7 @@ function watchBatteryTipChanges() {
 
   batteryEstimateObserver.observe(batteryTipRoot, {
     childList: true,
-    subtree: true,
+    subtree: true
   });
 }
 
@@ -526,7 +530,7 @@ export function createVerticalProgressBar(percent = 0) {
 export function updateSolarProgressFromValue(
   value,
   unit = "W",
-  pvCapacity = window.pvCapacity,
+  pvCapacity = window.pvCapacity
 ) {
   const powerW = parseFloat(value) || 0;
   const powerKw = unit === "W" ? powerW / 1000 : powerW;
@@ -535,7 +539,7 @@ export function updateSolarProgressFromValue(
 
   window.__foxessSolarState = {
     value,
-    unit,
+    unit
   };
 
   createVerticalProgressBar(percent);
