@@ -155,13 +155,13 @@ function updateBatteryEstimateDisplay() {
   const onePercentDuration = (capacity * 0.01) / Math.abs(powerKw);
   const onePercentDirection = isCharging ? "charge" : "discharge";
 
-  label.innerHTML = `~${formatDuration(duration)} until ${direction}${energyText}<br/>~${formatDuration(onePercentDuration)} per 1% ${onePercentDirection}`;
+  label.innerHTML = `~${formatDuration(duration)} til ${direction}${energyText}<br/>~${formatDuration(onePercentDuration)} per 1% ${onePercentDirection}`;
   label.style.display = "";
 }
 
 function updateFlowDotWidth(show) {
   document.querySelectorAll(".power_flow .flow_dot .fl_tips4").forEach((el) => {
-    el.style.width = show ? "160px" : "";
+    el.style.width = show ? "180px" : "";
   });
 }
 
