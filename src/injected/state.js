@@ -4,13 +4,10 @@
  */
 
 const state = {
-  // Default to stacked charts until the popup explicitly requests unstacked mode.
+  // Default to stacked charts until settings say otherwise.
   _currentStackMode: true,
-  _showSankey: false,
+  _showSankey: true,
   _hideOpenTabs: true,
-  _lastApplyTime: 0,
-  _applyTimeout: null,
-  _originalDataCache: new Map(),
 
   get currentStackMode() {
     return this._currentStackMode;
@@ -31,24 +28,6 @@ const state = {
   },
   set hideOpenTabs(val) {
     this._hideOpenTabs = val;
-  },
-
-  get lastApplyTime() {
-    return this._lastApplyTime;
-  },
-  set lastApplyTime(val) {
-    this._lastApplyTime = val;
-  },
-
-  get applyTimeout() {
-    return this._applyTimeout;
-  },
-  set applyTimeout(val) {
-    this._applyTimeout = val;
-  },
-
-  get originalDataCache() {
-    return this._originalDataCache;
   },
 };
 

@@ -1,5 +1,7 @@
 import state from "../state.js";
 
+const originalSeriesCache = new WeakMap();
+
 /**
  * Toggle ECharts bar chart between stacked and unstacked display.
  * @param {object} inst - ECharts instance
@@ -8,18 +10,19 @@ import state from "../state.js";
 export function toggleUnstack(inst, stack) {
   if (!inst) return;
 
-  const now = Date.now();
-  if (now - state.lastApplyTime < 300) return;
-  state.lastApplyTime = now;
-
   const opt = inst.getOption();
   if (!opt?.series) return;
 
-  // Generate stable chart ID
-  const chartId = inst.id || `chart_${Math.random().toString(36).substr(2, 9)}`;
+  // === CACHE ORIGINAL DATA (once per instance, but retry if it was empty) ===
+  const cachedOriginal = originalSeriesCache.get(inst);
+  const hadData = Boolean(
+    cachedOriginal?.some((series) => Array.isArray(series) && series.length > 0),
+  );
+  const hasData = opt.series.some(
+    (s) => Array.isArray(s.data) && s.data.length > 0,
+  );
 
-  // === CACHE ORIGINAL DATA (only once) ===
-  if (!state.originalDataCache.has(chartId)) {
+  if (!cachedOriginal || (hasData && !hadData)) {
     const originalSeries = opt.series.map((s) => {
       if (Array.isArray(s.data)) {
         return s.data.map((item) => {
@@ -32,16 +35,16 @@ export function toggleUnstack(inst, stack) {
       return s.data;
     });
 
-    state.originalDataCache.set(chartId, originalSeries);
+    originalSeriesCache.set(inst, originalSeries);
   }
 
-  const cachedOriginal = state.originalDataCache.get(chartId);
+  const cached = originalSeriesCache.get(inst);
   let needsUpdate = false;
 
   opt.series.forEach((s, seriesIndex) => {
     if (!Array.isArray(s.data)) return;
 
-    const originalSeriesData = cachedOriginal?.[seriesIndex];
+    const originalSeriesData = cached?.[seriesIndex];
     if (!originalSeriesData) return;
 
     s.data = s.data.map((item, index) => {
@@ -76,20 +79,19 @@ export function toggleUnstack(inst, stack) {
   });
 
   if (opt.yAxis?.[0]) {
-    const desiredMin = stack ? undefined : 0;
+    const desiredMin = stack ? null : 0;
     if (opt.yAxis[0].min !== desiredMin) {
       opt.yAxis[0].min = desiredMin;
       needsUpdate = true;
     }
   }
 
-  if (needsUpdate) {
-    inst.setOption(opt, {
-      notMerge: true,
-      replaceMerge: ["series", "yAxis"],
-    });
-    inst.resize();
-  }
+  // Only touch the chart when something actually changed; this is what stops
+  // the rendered -> setOption -> rendered feedback loop.
+  if (!needsUpdate) return;
+
+  inst.setOption(opt, { replaceMerge: ["series", "yAxis"] });
+  inst.resize();
 }
 
 /**
@@ -98,10 +100,7 @@ export function toggleUnstack(inst, stack) {
 export function applyToAllCharts() {
   const containers = document.querySelectorAll(".echart");
 
-  if (containers.length === 0) {
-    console.warn("⚠️ No .echart elements found on page!");
-    return;
-  }
+  if (containers.length === 0) return;
 
   containers.forEach((container) => {
     const inst = window.echarts?.getInstanceByDom(container);

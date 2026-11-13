@@ -1,150 +1,143 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  const unstackCharts = document.getElementById("unstackCharts");
-  const hideOpenTabs = document.getElementById("hideOpenTabs");
-  const showSankey = document.getElementById("showSankey");
-  const showSolarGauge = document.getElementById("showSolarGauge");
-  const showSolarCapacity = document.getElementById("showSolarCapacity");
-  const showSolarPercent = document.getElementById("showSolarPercent");
-  const showSolarHistory = document.getElementById("showSolarHistory");
-  const showBatteryEstimate = document.getElementById("showBatteryEstimate");
-  const batteryCapacityKwh = document.getElementById("batteryCapacityKwh");
+  const SOURCE = "foxesscloud-extension";
+
+  // Keep in sync with dist/content.js.
+  const DEFAULTS = {
+    unstackCharts: false,
+    hideOpenTabs: true,
+    showSankey: true,
+    showSolarGauge: true,
+    showSolarCapacity: true,
+    showSolarPercent: true,
+    showSolarHistory: true,
+    showBatteryEstimate: true,
+    batteryCapacityKwh: 0,
+  };
+  const KEYS = Object.keys(DEFAULTS);
+
+  const controls = {
+    unstackCharts: document.getElementById("unstackCharts"),
+    hideOpenTabs: document.getElementById("hideOpenTabs"),
+    showSankey: document.getElementById("showSankey"),
+    showSolarGauge: document.getElementById("showSolarGauge"),
+    showSolarCapacity: document.getElementById("showSolarCapacity"),
+    showSolarPercent: document.getElementById("showSolarPercent"),
+    showSolarHistory: document.getElementById("showSolarHistory"),
+    showBatteryEstimate: document.getElementById("showBatteryEstimate"),
+    batteryCapacityKwh: document.getElementById("batteryCapacityKwh"),
+  };
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
   if (!tab?.id) {
     console.error("❌ No active tab found");
     return;
   }
 
-  // Send message using postMessage (this is what injected.js listens for)
-  const sendToInjected = (type, value) => {
+  const storage = chrome.storage?.local;
+
+  const readStored = () =>
+    new Promise((resolve) => {
+      if (!storage) {
+        resolve({ ...DEFAULTS });
+        return;
+      }
+      storage.get(KEYS, (stored) => resolve({ ...DEFAULTS, ...stored }));
+    });
+
+  const settings = await readStored();
+
+  const syncInputs = () => {
+    controls.unstackCharts.checked = Boolean(settings.unstackCharts);
+    controls.hideOpenTabs.checked = Boolean(settings.hideOpenTabs);
+    controls.showSankey.checked = Boolean(settings.showSankey);
+    controls.showSolarGauge.checked = Boolean(settings.showSolarGauge);
+    controls.showSolarCapacity.checked = Boolean(settings.showSolarCapacity);
+    controls.showSolarPercent.checked = Boolean(settings.showSolarPercent);
+    controls.showSolarHistory.checked = Boolean(settings.showSolarHistory);
+    controls.showBatteryEstimate.checked = Boolean(settings.showBatteryEstimate);
+    controls.batteryCapacityKwh.value =
+      settings.batteryCapacityKwh === 0 ? "" : settings.batteryCapacityKwh;
+  };
+
+  const sendSnapshot = () => {
     chrome.scripting
       .executeScript({
         target: { tabId: tab.id },
+        world: "ISOLATED",
         func: (message) => {
           window.postMessage(message, "*");
         },
         args: [
           {
-            source: "foxesscloud-extension",
-            type: type,
-            value: value,
+            source: SOURCE,
+            type: "APPLY_SETTINGS",
+            settings: { ...settings },
           },
         ],
       })
-      .catch((err) => console.warn("Failed to send message:", err));
+      .catch((err) => console.warn("[FoxESS popup] Failed to send settings:", err));
   };
 
-  const loadSettings = () => {
-    const sendStoredCapacity = () => {
-      const capacityValue = parseFloat(batteryCapacityKwh.value) || 0;
-      console.log(
-        "[FoxESS popup] restore send SET_BATTERY_CAPACITY:",
-        capacityValue,
-      );
-      sendToInjected("SET_BATTERY_CAPACITY", capacityValue);
-    };
+  const update = (key, value) => {
+    settings[key] = value;
+    if (storage) storage.set({ [key]: value });
+    sendSnapshot();
+  };
 
-    if (!chrome?.storage?.local) {
-      const saved = localStorage.getItem("foxess_battery_capacity");
-      batteryCapacityKwh.value = saved ?? "";
-      showBatteryEstimate.checked = true;
-      console.log("[FoxESS popup] loadSettings localStorage fallback:", saved);
+  syncInputs();
+  // Apply the stored snapshot even when the page missed it during boot.
+  sendSnapshot();
 
-      sendToInjected("SET_UNSTACKED", !unstackCharts.checked);
-      sendToInjected("HIDE_OPEN_TABS", hideOpenTabs.checked);
-      sendToInjected("SHOW_SOLAR_GAUGE", showSolarGauge.checked);
-      sendToInjected("SHOW_SOLAR_CAPACITY", showSolarCapacity.checked);
-      sendToInjected("SHOW_SOLAR_PERCENT_LABEL", showSolarPercent.checked);
-      sendToInjected("SHOW_SOLAR_HISTORY", showSolarHistory.checked);
-      sendToInjected("SHOW_BATTERY_ESTIMATE", showBatteryEstimate.checked);
-      sendStoredCapacity();
-      return;
-    }
+  controls.unstackCharts.addEventListener("change", (e) =>
+    update("unstackCharts", e.target.checked),
+  );
+  controls.hideOpenTabs.addEventListener("change", (e) =>
+    update("hideOpenTabs", e.target.checked),
+  );
+  controls.showSankey.addEventListener("change", (e) =>
+    update("showSankey", e.target.checked),
+  );
+  controls.showSolarGauge.addEventListener("change", (e) =>
+    update("showSolarGauge", e.target.checked),
+  );
+  controls.showSolarCapacity.addEventListener("change", (e) =>
+    update("showSolarCapacity", e.target.checked),
+  );
+  controls.showSolarPercent.addEventListener("change", (e) =>
+    update("showSolarPercent", e.target.checked),
+  );
+  controls.showSolarHistory.addEventListener("change", (e) =>
+    update("showSolarHistory", e.target.checked),
+  );
+  controls.showBatteryEstimate.addEventListener("change", (e) =>
+    update("showBatteryEstimate", e.target.checked),
+  );
 
-    chrome.storage.local.get(
-      ["showBatteryEstimate", "batteryCapacityKwh"],
-      (stored) => {
-        console.log("[FoxESS popup] loadSettings stored:", stored);
-        showBatteryEstimate.checked = stored.showBatteryEstimate ?? true;
-        batteryCapacityKwh.value =
-          stored.batteryCapacityKwh ??
-          localStorage.getItem("foxess_battery_capacity") ??
-          "";
-
-        sendToInjected("SET_UNSTACKED", !unstackCharts.checked);
-        sendToInjected("HIDE_OPEN_TABS", hideOpenTabs.checked);
-        sendToInjected("SHOW_SOLAR_GAUGE", showSolarGauge.checked);
-        sendToInjected("SHOW_SOLAR_CAPACITY", showSolarCapacity.checked);
-        sendToInjected("SHOW_SOLAR_PERCENT_LABEL", showSolarPercent.checked);
-        sendToInjected("SHOW_SOLAR_HISTORY", showSolarHistory.checked);
-        sendToInjected("SHOW_BATTERY_ESTIMATE", showBatteryEstimate.checked);
-        sendStoredCapacity();
-      },
+  const updateCapacity = (value) => {
+    const numeric = parseFloat(value);
+    update(
+      "batteryCapacityKwh",
+      Number.isFinite(numeric) && numeric > 0 ? numeric : 0,
     );
   };
+  controls.batteryCapacityKwh.addEventListener("input", (e) =>
+    updateCapacity(e.target.value),
+  );
+  controls.batteryCapacityKwh.addEventListener("change", (e) =>
+    updateCapacity(e.target.value),
+  );
 
-  loadSettings();
-
-  unstackCharts.addEventListener("change", (e) => {
-    sendToInjected("SET_UNSTACKED", !e.target.checked);
-  });
-
-  hideOpenTabs.addEventListener("change", (e) => {
-    sendToInjected("HIDE_OPEN_TABS", e.target.checked);
-  });
-
-  showSankey.addEventListener("change", (e) => {
-    sendToInjected("SHOW_SANKEY", e.target.checked);
-  });
-
-  showSolarGauge.addEventListener("change", (e) => {
-    sendToInjected("SHOW_SOLAR_GAUGE", e.target.checked);
-  });
-
-  showSolarCapacity.addEventListener("change", (e) => {
-    sendToInjected("SHOW_SOLAR_CAPACITY", e.target.checked);
-  });
-
-  showSolarPercent.addEventListener("change", (e) => {
-    sendToInjected("SHOW_SOLAR_PERCENT_LABEL", e.target.checked);
-  });
-
-  showSolarHistory.addEventListener("change", (e) => {
-    sendToInjected("SHOW_SOLAR_HISTORY", e.target.checked);
-  });
-
-  showBatteryEstimate.addEventListener("change", (e) => {
-    const enabled = e.target.checked;
-    if (chrome?.storage?.local) {
-      chrome.storage.local.set({ showBatteryEstimate: enabled });
-    }
-    localStorage.setItem("foxess_show_battery_estimate", enabled ? "1" : "0");
-    sendToInjected("SHOW_BATTERY_ESTIMATE", enabled);
-  });
-
-  const persistBatteryCapacity = (value) => {
-    if (chrome?.storage?.local) {
-      chrome.storage.local.set({ batteryCapacityKwh: value });
-    }
-    localStorage.setItem("foxess_battery_capacity", value);
-  };
-
-  const updateBatteryCapacity = (value) => {
-    const numericValue = parseFloat(value) || 0;
-    persistBatteryCapacity(value);
-    sendToInjected("SET_BATTERY_CAPACITY", numericValue);
-  };
-
-  batteryCapacityKwh.addEventListener("input", (e) => {
-    updateBatteryCapacity(e.target.value);
-  });
-
-  batteryCapacityKwh.addEventListener("change", (e) => {
-    updateBatteryCapacity(e.target.value);
-  });
-
-  batteryCapacityKwh.addEventListener("blur", (e) => {
-    updateBatteryCapacity(e.target.value);
-  });
+  if (chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local") return;
+      let changed = false;
+      for (const key of KEYS) {
+        if (key in changes) {
+          settings[key] = changes[key].newValue;
+          changed = true;
+        }
+      }
+      if (changed) syncInputs();
+    });
+  }
 });

@@ -9,10 +9,9 @@ export function showSankeyDiagram(isOn) {
 
   const sankey = document.getElementById("foxesscloud-sankey-container");
   const statR = document.querySelector(".eenery_stat_r");
-  if (sankey) {
-    sankey.style.display = state.showSankey ? "block" : "none";
-    statR.style.display = !state.showSankey ? "block" : "none";
-  }
+
+  if (statR) statR.style.display = state.showSankey ? "none" : "";
+  if (sankey) sankey.style.display = state.showSankey ? "block" : "none";
 }
 
 /**
@@ -32,7 +31,7 @@ export function renderSankeyFromData(energyData) {
     container.style.margin = "0";
 
     statR.parentNode.insertBefore(container, statR);
-    statR.style.display = state.showSankey ? "block" : "none";
+    showSankeyDiagram(state.showSankey);
   }
 
   // ====================== UNIT CONVERSION ======================

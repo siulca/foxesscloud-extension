@@ -1,9 +1,11 @@
 import state from "../state.js";
-import { toggleUnstack, applyToAllCharts } from "./unstack.js";
+import { toggleUnstack } from "./unstack.js";
+
+const RENDER_DELAY_MS = 300;
 
 /**
- * Hook an ECharts instance so it auto-applies unstack on render.
- * Prevents double-hooking via __foxessHooked flag.
+ * Hook an ECharts instance so it auto-applies the current stack mode after it
+ * renders. Prevents double-hooking via __foxessHooked flag.
  * @param {object} inst - ECharts instance
  */
 export function hookEchartsInstance(inst) {
@@ -11,49 +13,33 @@ export function hookEchartsInstance(inst) {
   inst.__foxessHooked = true;
 
   inst.on("rendered", () => {
-    setTimeout(() => {
+    if (inst.__foxessRenderTimer) clearTimeout(inst.__foxessRenderTimer);
+    inst.__foxessRenderTimer = setTimeout(() => {
+      inst.__foxessRenderTimer = null;
       toggleUnstack(inst, state.currentStackMode);
-    }, 500);
+    }, RENDER_DELAY_MS);
   });
 }
 
-// ==================== Observers ====================
+/**
+ * Hook every ECharts instance currently present in the DOM. Called from the
+ * single DOM observer, not from a timer.
+ */
+export function hookAllCharts() {
+  const echarts = window.echarts;
+  if (!echarts?.getInstanceByDom) return;
 
-const chartObserver = new MutationObserver(() => {
-  if (state.applyTimeout) clearTimeout(state.applyTimeout);
-  state.applyTimeout = setTimeout(() => {
-    applyToAllCharts();
+  document.querySelectorAll(".echart").forEach((container) => {
+    const inst = echarts.getInstanceByDom(container);
+    if (!inst) return;
 
-    document.querySelectorAll(".echart").forEach((container) => {
-      const inst = window.echarts?.getInstanceByDom(container);
-      if (inst) hookEchartsInstance(inst);
-    });
-  }, 250);
-});
+    const wasHooked = Boolean(inst.__foxessHooked);
+    hookEchartsInstance(inst);
 
-function startObserving() {
-  document.querySelectorAll(".echart").forEach((chart) => {
-    if (!chart.dataset.observed) {
-      chartObserver.observe(chart, { childList: true, subtree: true });
-      chart.dataset.observed = "true";
+    // Apply the current mode once, right after hooking. Subsequent renders are
+    // handled by the instance's "rendered" event.
+    if (!wasHooked) {
+      toggleUnstack(inst, state.currentStackMode);
     }
   });
 }
-
-const bodyObserver = new MutationObserver(() => {
-  startObserving();
-});
-
-bodyObserver.observe(document.body, { childList: true, subtree: true });
-
-// ==================== Initial Setup ====================
-setTimeout(() => {
-  startObserving();
-
-  document.querySelectorAll(".echart").forEach((container) => {
-    const inst = window.echarts?.getInstanceByDom(container);
-    if (inst) hookEchartsInstance(inst);
-  });
-
-  applyToAllCharts();
-}, 1500);

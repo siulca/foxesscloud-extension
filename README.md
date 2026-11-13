@@ -36,6 +36,7 @@ The extension source lives in `src/` and is split into ES modules. The productio
 foxesscloud-extension/
 ├── src/injected/            ← Source modules (edit here)
 │   ├── index.js             ← Entry point — wires everything together
+│   ├── dom.js               ← Single debounced DOM observer
 │   ├── state.js             ← Shared mutable state
 │   ├── chart/               ← ECharts unstack/hook modules
 │   ├── sankey/              ← Sankey diagram module
@@ -73,10 +74,13 @@ npm run watch
 
 ## Technical Details
 
-- **Manifest Version**: 3
+- **Manifest Version**: 3 (requires Chrome 111+)
 - **Build tool**: [esbuild](https://esbuild.github.io/) — fast bundler, no config needed
-- Uses `chrome.scripting` + main-world injection for deep ECharts integration
-- Observes DOM changes to handle dynamically loaded charts
+- `injected.js` runs as a **MAIN-world content script at `document_start`**, so the
+  fetch/XHR/WebSocket interceptors are installed before the dashboard boots
+- `content.js` is the isolated-world bridge that owns `chrome.storage` persistence
+- A single debounced `MutationObserver` handles SPA re-renders (no polling for DOM injection)
+- Dashboard preferences are stored in `chrome.storage.local` and applied on page load
 - Intercepts `fetch`, `XMLHttpRequest`, and `WebSocket` to capture energy data and plant details
 
 ---

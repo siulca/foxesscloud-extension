@@ -1,53 +1,61 @@
-import { updateSolarProgressFromValue } from "../progress-bar/vertical.js";
+import {
+  markSolarLive,
+  updateSolarProgressFromValue
+} from "../progress-bar/vertical.js";
 
 /**
  * Initialize the WebSocket interceptor for real-time solar power data.
  * Monitors /dew/v0/wsmaitian WebSocket connections and updates
  * the vertical progress bar with current solar power percentage.
+ *
+ * Runs at document_start so the patch is in place before the dashboard
+ * creates its socket.
  */
 export function initializeWebSocketInterceptor() {
+  if (window.__foxessWebSocketPatched) return;
+  window.__foxessWebSocketPatched = true;
+
+  const OriginalWebSocket = window.WebSocket;
+  if (!OriginalWebSocket) return;
+
   let currentWs = null;
   let currentListener = null;
 
-  const originalWebSocket = window.WebSocket;
+  class FoxESSWebSocket extends OriginalWebSocket {
+    constructor(url, protocols) {
+      super(url, protocols);
 
-  window.WebSocket = function (url, protocols) {
-    const ws = new originalWebSocket(url, protocols);
+      if (typeof url === "string" && url.includes("/dew/v0/wsmaitian")) {
+        if (currentWs && currentListener) {
+          currentWs.removeEventListener("message", currentListener);
+        }
 
-    // Check if this is our target socket
-    if (url && url.includes("/dew/v0/wsmaitian")) {
-      // Remove listener from previous socket
-      if (currentWs && currentListener) {
-        currentWs.removeEventListener("message", currentListener);
-      }
+        currentListener = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const solar = data?.result?.node?.solar?.power;
 
-      // Create new listener
-      currentListener = function (event) {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.errno === 0 && data.result?.node?.solar?.power?.value) {
-            const solarPower = data.result.node.solar.power;
-            updateSolarProgressFromValue(solarPower.value, solarPower.unit);
+            if (data.errno === 0 && solar?.value !== undefined) {
+              markSolarLive();
+              updateSolarProgressFromValue(solar.value, solar.unit);
+            }
+          } catch (e) {
+            // Silent fail
           }
-        } catch (e) {
-          // Silent fail
-        }
-      };
+        };
 
-      // Attach to this new socket
-      ws.addEventListener("message", currentListener);
-      currentWs = ws; // Update reference
+        this.addEventListener("message", currentListener);
+        currentWs = this;
 
-      // Optional: clean up if socket closes
-      ws.addEventListener("close", () => {
-        if (currentWs === ws) {
-          currentWs = null;
-          currentListener = null;
-        }
-      });
+        this.addEventListener("close", () => {
+          if (currentWs === this) {
+            currentWs = null;
+            currentListener = null;
+          }
+        });
+      }
     }
+  }
 
-    return ws;
-  };
+  window.WebSocket = FoxESSWebSocket;
 }
