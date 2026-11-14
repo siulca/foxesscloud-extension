@@ -13,9 +13,8 @@ import { applyAxesOverlays } from "./axes.js";
  * - Tracks which subsystem changed, so a chart render does not re-run the
  *   dashboard logic and vice versa.
  *
- * There is no polling for DOM injection or reconciliation. The only timer that
- * can repeat is the gauge's history deadline, which is a single re-armed timeout
- * (not an interval) and is cancelled when the graph is hidden or removed.
+ * There is no polling for DOM injection or reconciliation, and the gauge's
+ * history graph is drawn straight from each reading (no sampler, no interval).
  */
 
 const DASHBOARD_HOSTS = ".fl_tips2, .tip_solar, .tip_bat";

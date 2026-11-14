@@ -1,16 +1,15 @@
-const HISTORY_LIMIT = 12;
-const HISTORY_POINT_SPACING = 10;
-const HISTORY_GRAPH_WIDTH = (HISTORY_LIMIT - 1) * HISTORY_POINT_SPACING;
+const HISTORY_WINDOW_MS = 60_000; // rolling 1 minute window, x is real time
+const HISTORY_MAX_POINTS = 240; // safety cap in case the socket bursts
+const HISTORY_GRAPH_WIDTH = 110;
 const HISTORY_GRAPH_HEIGHT = 80;
-const HISTORY_INTERVAL_MS = 5_000; // 12 points -> ~1 minute rolling window
+/** Fraction of the line (from the oldest point) over which it fades out. */
+const HISTORY_FADE_FRACTION = 0.45;
+const HISTORY_FADE_ID = "solar-history-fade";
 const GAUGE_LINE_COLOR = "rgb(0,205,212)";
+/** Timestamped samples: { t: epoch ms, v: percent }. */
 let solarPercentHistory = [];
-/** Absolute time at which the next history point becomes due. */
-let nextHistoryDueAt = 0;
-/** The one and only history timer (a self-scheduling timeout, not an interval). */
-let historyTimer = null;
-/** Absolute time the armed timer is targeting, used to avoid re-arming churn. */
-let historyTimerAt = 0;
+/** True once at least one non-zero sample has been recorded. */
+let hasNonZeroHistory = false;
 let lastLiveUpdateAt = 0;
 
 const solarGaugeOptions = {
@@ -250,9 +249,6 @@ function applyGaugeVisibility() {
     document.getElementById("solar-history-wrapper"),
     gaugeOn && solarGaugeOptions.showHistory
   );
-
-  // Arms the single history timer, or cancels it when the graph is hidden.
-  rescheduleHistoryTimer();
 }
 
 function setSolarCapacityVisible(show) {
@@ -268,30 +264,35 @@ function setSolarPercentLabelVisible(show) {
 function setSolarHistoryVisible(show) {
   solarGaugeOptions.showHistory = show;
   applyGaugeVisibility();
+  if (show) renderHistoryChart();
 }
 
+/**
+ * Creates (or re-attaches) the history container.
+ * @returns {boolean} true when a new SVG was created, so the caller redraws it.
+ */
 function ensureHistoryChart() {
   const wrapper = document.getElementById("vertical-progress-bar");
-  if (!wrapper) return;
+  if (!wrapper) return false;
 
   let historyWrapper = document.getElementById("solar-history-wrapper");
-  if (historyWrapper) {
-    if (historyWrapper.parentElement !== wrapper) {
-      wrapper.appendChild(historyWrapper);
-    }
-    return;
+  if (!historyWrapper) {
+    historyWrapper = document.createElement("div");
+    historyWrapper.id = "solar-history-wrapper";
+    historyWrapper.style.cssText = `
+        position: absolute;
+        left: -${HISTORY_GRAPH_WIDTH + 15}px;
+        top: 0;
+        width: ${HISTORY_GRAPH_WIDTH}px;
+        height: ${HISTORY_GRAPH_HEIGHT}px;
+        pointer-events: none;
+      `;
+    wrapper.appendChild(historyWrapper);
+  } else if (historyWrapper.parentElement !== wrapper) {
+    wrapper.appendChild(historyWrapper);
   }
 
-  historyWrapper = document.createElement("div");
-  historyWrapper.id = "solar-history-wrapper";
-  historyWrapper.style.cssText = `
-      position: absolute;
-      left: -${HISTORY_GRAPH_WIDTH + 15}px;
-      top: 0;
-      width: ${HISTORY_GRAPH_WIDTH}px;
-      height: ${HISTORY_GRAPH_HEIGHT}px;
-      pointer-events: none;
-    `;
+  if (document.getElementById("solar-history-svg")) return false;
 
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.id = "solar-history-svg";
@@ -306,46 +307,87 @@ function ensureHistoryChart() {
     `;
 
   historyWrapper.appendChild(svg);
-  wrapper.appendChild(historyWrapper);
+  return true;
 }
 
-function renderHistoryChart() {
+/** Drop samples that fell out of the rolling window (and enforce the cap). */
+function trimHistory(now = Date.now()) {
+  const cutoff = now - HISTORY_WINDOW_MS;
+
+  let first = 0;
+  while (first < solarPercentHistory.length && solarPercentHistory[first].t < cutoff) {
+    first++;
+  }
+  if (first) solarPercentHistory.splice(0, first);
+
+  const overflow = solarPercentHistory.length - HISTORY_MAX_POINTS;
+  if (overflow > 0) solarPercentHistory.splice(0, overflow);
+}
+
+function historyY(value) {
+  const clamped = Math.max(0, Math.min(100, value));
+  return HISTORY_GRAPH_HEIGHT - (clamped / 100) * HISTORY_GRAPH_HEIGHT;
+}
+
+function renderHistoryChart(now = Date.now()) {
   const svg = document.getElementById("solar-history-svg");
   if (!svg) return;
 
-  const values = solarPercentHistory.slice(-HISTORY_LIMIT);
-  if (values.length === 0) {
-    svg.innerHTML = "";
+  trimHistory(now);
+
+  const samples = solarPercentHistory;
+  if (samples.length === 0) {
+    if (svg.innerHTML !== "") svg.innerHTML = "";
     return;
   }
 
-  if (values.length === 1) {
+  // x is real time, not sample index: the newest reading always sits on the
+  // right edge and older samples slide left. That keeps the line's tip on the
+  // same value the gauge shows at the same instant.
+  const newest = samples[samples.length - 1];
+  const newestX = HISTORY_GRAPH_WIDTH;
+  const xFor = (t) =>
+    newestX - ((newest.t - t) / HISTORY_WINDOW_MS) * HISTORY_GRAPH_WIDTH;
+
+  if (samples.length === 1) {
     // Show a dot immediately; the polyline appears once the second sample lands.
-    const y = HISTORY_GRAPH_HEIGHT - (values[0] / 100) * HISTORY_GRAPH_HEIGHT;
-    svg.innerHTML = `<circle cx="${HISTORY_GRAPH_WIDTH}" cy="${y}" r="2" fill="${GAUGE_LINE_COLOR}" />`;
+    svg.innerHTML = `<circle cx="${newestX}" cy="${historyY(samples[0].v)}" r="2" fill="${GAUGE_LINE_COLOR}" />`;
     return;
   }
 
-  const pointCount = values.length;
-  const startX = HISTORY_GRAPH_WIDTH - (pointCount - 1) * HISTORY_POINT_SPACING;
-  const points = values
-    .map((value, index) => {
-      const x = startX + index * HISTORY_POINT_SPACING;
-      const y = HISTORY_GRAPH_HEIGHT - (value / 100) * HISTORY_GRAPH_HEIGHT;
-      return `${x},${y}`;
-    })
+  const points = samples
+    .map((sample) => `${xFor(sample.t).toFixed(1)},${historyY(sample.v).toFixed(1)}`)
     .join(" ");
 
-  const lastValue = values[values.length - 1];
-  const lastX = startX + (values.length - 1) * HISTORY_POINT_SPACING;
-  const lastY = HISTORY_GRAPH_HEIGHT - (lastValue / 100) * HISTORY_GRAPH_HEIGHT;
-  const arrowPoints = `${lastX + 6},${lastY} ${lastX - 1},${lastY - 4} ${lastX - 1},${lastY + 4}`;
+  const lastY = historyY(newest.v);
+  const arrowPoints =
+    `${newestX + 6},${lastY.toFixed(1)} ` +
+    `${newestX - 1},${(lastY - 4).toFixed(1)} ` +
+    `${newestX - 1},${(lastY + 4).toFixed(1)}`;
+
+  // Fade the oldest end of the line to fully transparent with a stroke
+  // gradient: one declarative node, no per-point opacity, nothing to composite
+  // and no mask layer. The gradient ends before the newest point so the
+  // arrow and the recent samples stay fully opaque.
+  const oldestX = Math.min(xFor(samples[0].t), newestX - 1);
+  const fadeEnd =
+    oldestX + Math.max(1, (newestX - oldestX) * HISTORY_FADE_FRACTION);
 
   svg.innerHTML = `
+      <defs>
+        <linearGradient
+          id="${HISTORY_FADE_ID}"
+          gradientUnits="userSpaceOnUse"
+          x1="${oldestX.toFixed(1)}" y1="0" x2="${fadeEnd.toFixed(1)}" y2="0"
+        >
+          <stop offset="0" stop-color="${GAUGE_LINE_COLOR}" stop-opacity="0" />
+          <stop offset="1" stop-color="${GAUGE_LINE_COLOR}" stop-opacity="1" />
+        </linearGradient>
+      </defs>
       <polyline
         points="${points}"
         fill="none"
-        stroke="${GAUGE_LINE_COLOR}"
+        stroke="url(#${HISTORY_FADE_ID})"
         stroke-width="2"
         stroke-linecap="round"
         stroke-linejoin="round"
@@ -357,14 +399,23 @@ function renderHistoryChart() {
     `;
 }
 
-function pushHistoryPoint(percent) {
+function pushHistoryPoint(percent, at = Date.now()) {
   const numeric = Number(percent);
-  if (!Number.isFinite(numeric)) return;
+  if (!Number.isFinite(numeric)) return false;
 
-  const clamped = Math.max(0, Math.min(100, numeric));
-  solarPercentHistory.push(clamped);
-  if (solarPercentHistory.length > HISTORY_LIMIT) solarPercentHistory.shift();
-  renderHistoryChart();
+  const value = Math.max(0, Math.min(100, numeric));
+  if (value > 0) hasNonZeroHistory = true;
+
+  const last = solarPercentHistory[solarPercentHistory.length - 1];
+
+  // A changed value is always recorded. An unchanged value only reaffirms the
+  // time axis about once a second, so rapid dashboard re-renders cannot pile
+  // up hundreds of identical points.
+  if (last && last.v === value && at - last.t < 1000) return false;
+
+  solarPercentHistory.push({ t: at, v: value });
+  renderHistoryChart(at);
+  return true;
 }
 
 function percentFromSolarState(solarState = window.__foxessSolarState) {
@@ -379,82 +430,27 @@ function percentFromSolarState(solarState = window.__foxessSolarState) {
 }
 
 /**
- * Record a history value, but only when the current 5 s slot is due.
+ * Record one history sample.
  *
- * This is called from two places, and both share the same clock:
- *   - the WebSocket value path, so a point is drawn as soon as a new reading
- *     arrives after the slot has elapsed (event driven);
- *   - the single deadline timer, which only fires when no reading arrived by
- *     the slot boundary (watchdog, so a constant value still extends the line).
- *
- * The due time is advanced on an absolute grid, so points never drift apart
- * even if timers or socket messages are late.
+ * This runs on the exact same call as the fill height and the percentage
+ * label, so the number and the end of the line change in the same frame.
+ * There is no sampler and no throttle: a reading is a point.
  */
-function addHistoryPoint(percent, force = false) {
-  const now = Date.now();
-  if (!nextHistoryDueAt) nextHistoryDueAt = now;
-  if (!force && now < nextHistoryDueAt) return false;
-
+function addHistoryPoint(percent) {
   const numeric = Number(percent);
   if (!Number.isFinite(numeric)) return false;
 
-  pushHistoryPoint(numeric);
+  // Never open the graph on a zero reading. At load the page briefly reports
+  // 0 kW before the live value arrives, which would draw a false dip to the
+  // bottom-left. A zero is accepted once the socket has reported (a genuine
+  // night-time zero) or once a non-zero sample is already on the chart.
+  if (numeric <= 0 && !lastLiveUpdateAt && !hasNonZeroHistory) return false;
 
-  if (nextHistoryDueAt <= now) {
-    const missedSlots = Math.floor((now - nextHistoryDueAt) / HISTORY_INTERVAL_MS);
-    nextHistoryDueAt += (missedSlots + 1) * HISTORY_INTERVAL_MS;
-  }
-
-  return true;
+  return pushHistoryPoint(numeric);
 }
 
 function historyEnabled() {
-  return (
-    solarGaugeOptions.showGauge &&
-    solarGaugeOptions.showHistory &&
-    Boolean(document.getElementById("solar-history-svg"))
-  );
-}
-
-function stopHistoryTimer() {
-  if (!historyTimer) return;
-  clearTimeout(historyTimer);
-  historyTimer = null;
-  historyTimerAt = 0;
-}
-
-/**
- * Arms the single history timer for the current grid slot. Safe to call on
- * every reading/observer pass: if the timer is already armed for the same slot
- * nothing happens, so there is no clearTimeout/setTimeout churn.
- */
-function rescheduleHistoryTimer() {
-  if (!historyEnabled()) {
-    stopHistoryTimer();
-    return;
-  }
-
-  if (!nextHistoryDueAt) nextHistoryDueAt = Date.now();
-  if (historyTimer && historyTimerAt === nextHistoryDueAt) return;
-
-  stopHistoryTimer();
-
-  // A "deadline" timeout, not an interval: it sleeps until the next grid slot
-  // and is re-armed whenever a point is recorded.
-  historyTimerAt = nextHistoryDueAt;
-  historyTimer = setTimeout(
-    historyTick,
-    Math.max(0, nextHistoryDueAt - Date.now())
-  );
-}
-
-function historyTick() {
-  historyTimer = null;
-  historyTimerAt = 0;
-  if (!historyEnabled()) return;
-
-  addHistoryPoint(percentFromSolarState(), true);
-  rescheduleHistoryTimer();
+  return solarGaugeOptions.showGauge && solarGaugeOptions.showHistory;
 }
 
 let batteryEstimateObserver = null;
@@ -659,13 +655,14 @@ function renderGauge(percent) {
     container.appendChild(progressWrapper);
   }
 
-  ensureHistoryChart();
+  const historyRebuilt = ensureHistoryChart();
   ensureCapacityLabel();
   ensureBatteryEstimateLabel();
   applyGaugeVisibility();
 
-  // Redraw in case the host re-render replaced the SVG between samples.
-  renderHistoryChart();
+  // Only needed when the host re-render replaced the SVG; otherwise the
+  // existing markup is already correct.
+  if (historyRebuilt) renderHistoryChart();
 
   if (percent !== undefined) {
     const numeric = percent === null ? null : Number(percent);
@@ -681,10 +678,9 @@ function renderGauge(percent) {
     }
 
     updateGaugeLabel(clamped);
-    if (clamped !== null && historyEnabled()) {
-      // Draw immediately when a reading arrives on/after a slot boundary.
-      if (addHistoryPoint(clamped)) rescheduleHistoryTimer();
-    }
+
+    // Same call, same frame: the number and the end of the line move together.
+    if (clamped !== null && historyEnabled()) addHistoryPoint(clamped);
   }
 
   updateCapacityDisplay();
@@ -695,15 +691,24 @@ function renderGauge(percent) {
   return progressWrapper;
 }
 
-export function createVerticalProgressBar(percent = 0) {
-  return renderGauge(percent);
-}
-
+/**
+ * Re-apply the gauge from the last known reading.
+ *
+ * Used after an SPA re-render (the host nodes were replaced) and when settings
+ * change. It never invents data: with no reading yet it only builds the DOM.
+ */
 export function ensureSolarGauge() {
   if (!window.__foxessSolarState) return renderGauge(undefined);
   return renderGauge(percentFromSolarState());
 }
 
+/**
+ * The single entry point for solar data.
+ *
+ * Called from the WebSocket message handler, from the API interceptor (plant
+ * capacity) and from the DOM fallback. One call updates everything: fill,
+ * percentage, capacity, battery estimate and the history line.
+ */
 export function updateSolarProgressFromValue(
   value,
   unit = "W",
@@ -722,7 +727,7 @@ export function updateSolarProgressFromValue(
     unit
   };
 
-  createVerticalProgressBar(percent);
+  renderGauge(percent);
   return percent;
 }
 
@@ -755,6 +760,10 @@ export function refreshSolarFromDom(maxAgeMs = 15000) {
 
   const parsed = parseSolarPowerFromDom();
   if (!parsed) return;
+
+  // 0 kW in the DOM is usually the boot placeholder, not a measurement.
+  // Ignore it so the gauge and the history do not start from a false zero.
+  if (parsed.value === 0) return;
 
   updateSolarProgressFromValue(parsed.value, parsed.unit, window.pvCapacity);
 }
