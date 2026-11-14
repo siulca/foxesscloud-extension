@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     showSolarHistory: true,
     showBatteryEstimate: true,
     batteryCapacityKwh: 0,
+    minSocPercent: 10,
   };
   const KEYS = Object.keys(DEFAULTS);
 
@@ -25,6 +26,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     showSolarHistory: document.getElementById("showSolarHistory"),
     showBatteryEstimate: document.getElementById("showBatteryEstimate"),
     batteryCapacityKwh: document.getElementById("batteryCapacityKwh"),
+    minSocPercent: document.getElementById("minSocPercent"),
   };
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -57,6 +59,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     controls.showBatteryEstimate.checked = Boolean(settings.showBatteryEstimate);
     controls.batteryCapacityKwh.value =
       settings.batteryCapacityKwh === 0 ? "" : settings.batteryCapacityKwh;
+    controls.minSocPercent.value = settings.minSocPercent;
   };
 
   const sendSnapshot = () => {
@@ -125,6 +128,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   );
   controls.batteryCapacityKwh.addEventListener("change", (e) =>
     updateCapacity(e.target.value),
+  );
+
+  const updateMinSoc = (value, finalize = false) => {
+    const numeric = parseFloat(value);
+    if (!Number.isFinite(numeric)) {
+      if (finalize) update("minSocPercent", 10);
+      return;
+    }
+    update("minSocPercent", Math.max(0, Math.min(100, numeric)));
+  };
+  controls.minSocPercent.addEventListener("input", (e) =>
+    updateMinSoc(e.target.value),
+  );
+  controls.minSocPercent.addEventListener("change", (e) =>
+    updateMinSoc(e.target.value, true),
   );
 
   if (chrome.storage?.onChanged) {

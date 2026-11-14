@@ -21,6 +21,7 @@ import {
   toggleSolarHistory,
   toggleBatteryEstimate,
   setBatteryCapacity,
+  setBatteryMinSoc,
 } from "./progress-bar/vertical.js";
 import { initializeWebSocketInterceptor } from "./websocket/ws.js";
 import { applyToAllCharts } from "./chart/unstack.js";
@@ -113,6 +114,12 @@ function applySettings(settings) {
   ) {
     setBatteryCapacity(settings.batteryCapacityKwh);
   }
+  if (
+    settings.minSocPercent !== undefined &&
+    settings.minSocPercent !== null
+  ) {
+    setBatteryMinSoc(settings.minSocPercent);
+  }
 
   // Host elements may not exist yet; this is a no-op until they do.
   ensureSolarGauge();
@@ -170,6 +177,10 @@ window.addEventListener("message", (event) => {
 
     case "SET_BATTERY_CAPACITY":
       setBatteryCapacity(data.value);
+      break;
+
+    case "SET_MIN_SOC":
+      setBatteryMinSoc(data.value);
       break;
 
     case "FOXESS_READY":

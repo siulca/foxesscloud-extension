@@ -21,6 +21,7 @@
     showSolarHistory: true,
     showBatteryEstimate: true,
     batteryCapacityKwh: 0,
+    minSocPercent: 10,
   };
 
   const KEYS = Object.keys(DEFAULTS);

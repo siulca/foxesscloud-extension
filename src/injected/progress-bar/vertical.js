@@ -19,13 +19,28 @@ const solarGaugeOptions = {
   showHistory: true
 };
 
+const DEFAULT_MIN_SOC_PERCENT = 10;
+
+function parsePercent(value, fallback) {
+  if (value === null || value === undefined || value === "") return fallback;
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+
+  return Math.max(0, Math.min(100, numeric));
+}
+
 const batteryEstimateOptions = {
   showEstimate: true,
   capacityKwh:
     Number(
       window.__foxessBatteryCapacity ??
         parseFloat(localStorage.getItem("foxess_battery_capacity") || "0")
-    ) || 0
+    ) || 0,
+  minSocPercent: parsePercent(
+    window.__foxessMinSoc ?? localStorage.getItem("foxess_min_soc"),
+    DEFAULT_MIN_SOC_PERCENT
+  )
 };
 
 function formatDuration(hours) {
@@ -105,6 +120,10 @@ function updateBatteryEstimateDisplay() {
   }
 
   let capacity = Number(batteryEstimateOptions.capacityKwh) || 0;
+  const minSocPercent = parsePercent(
+    batteryEstimateOptions.minSocPercent,
+    DEFAULT_MIN_SOC_PERCENT
+  );
   const showEstimate = batteryEstimateOptions.showEstimate;
   const batteryPower = parseBatteryPower();
   const socPercent = parseBatteryStateOfCharge();
@@ -126,16 +145,18 @@ function updateBatteryEstimateDisplay() {
       : batteryFlowStatus === "discharging"
         ? false
         : powerKw > 0;
-  const energyRemaining = Number.isFinite(socPercent)
-    ? capacity * (isCharging ? (100 - socPercent) / 100 : socPercent / 100)
-    : capacity;
-  const energyAtSoc = Number.isFinite(socPercent)
-    ? capacity * (socPercent / 100)
-    : null;
-  const energyText = Number.isFinite(socPercent)
+  const hasSoc = Number.isFinite(socPercent);
+  // Charging targets 100 %; discharging counts only the energy above the
+  // configured minimum SOC, because the battery stops there in practice.
+  const energyToFull = hasSoc ? (capacity * (100 - socPercent)) / 100 : capacity;
+  const usableEnergy = hasSoc
+    ? (capacity * Math.max(0, socPercent - minSocPercent)) / 100
+    : (capacity * (100 - minSocPercent)) / 100;
+  const energyRemaining = isCharging ? energyToFull : usableEnergy;
+  const energyText = hasSoc
     ? isCharging
-      ? `: ${energyRemaining.toFixed(1)} kWh`
-      : `: ${energyAtSoc.toFixed(1)} kWh`
+      ? `: ${energyToFull.toFixed(1)} kWh`
+      : `: ${usableEnergy.toFixed(1)} kWh`
     : "";
 
   if (
@@ -197,6 +218,20 @@ export function setBatteryCapacity(value) {
     } catch (err) {
       // Ignore storage errors; the in-memory value is authoritative.
     }
+  }
+
+  updateBatteryEstimateDisplay();
+}
+
+export function setBatteryMinSoc(value) {
+  const minSoc = parsePercent(value, DEFAULT_MIN_SOC_PERCENT);
+  batteryEstimateOptions.minSocPercent = minSoc;
+  window.__foxessMinSoc = minSoc;
+
+  try {
+    localStorage.setItem("foxess_min_soc", String(minSoc));
+  } catch (err) {
+    // Ignore storage errors; the in-memory value is authoritative.
   }
 
   updateBatteryEstimateDisplay();

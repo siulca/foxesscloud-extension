@@ -12,6 +12,7 @@ A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful q
 - **Unstack Charts**: On by default — Switch between stacked and unstacked view for ECharts bar and line charts
 - **Sankey Diagram**: On by default — Add an energy flow Sankey diagram to the energy stats page, which replaces the Supply/Usage panel
 - **Solar Production Gauge**: On by default — Real-time solar power gauge (vertical progress bar) showing current output as a percentage of PV capacity
+- **Battery Estimate**: Adds time-to-full / time-to-empty estimates to the battery tile, using the configured battery capacity and minimum SOC (default 10 %)
 
 ## Installation
 

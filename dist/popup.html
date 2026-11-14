@@ -102,17 +102,35 @@
       </div>
       <div style="margin-left: 12px; margin-top: 8px">
         <label style="display: flex; align-items: center; gap: 8px">
-          <span>Max battery capacity</span>
+          <span>Max Capacity (kWh)</span>
+          <input
+            id="batteryCapacityKwh"
+            type="number"
+            min="0"
+            step="0.1"
+            style="width: 80px"
+          />
         </label>
 
-        <input
-          id="batteryCapacityKwh"
-          type="number"
-          min="0"
-          step="0.1"
-          placeholder="kWh"
-          style="width: 80px"
-        />
+        <label
+          style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+          "
+        >
+          <span>Min SOC (%)</span>
+          <input
+            id="minSocPercent"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            placeholder="%"
+            style="width: 80px"
+          />
+        </label>
       </div>
     </div>
 
