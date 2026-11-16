@@ -20,6 +20,10 @@ const solarGaugeOptions = {
 };
 
 const DEFAULT_MIN_SOC_PERCENT = 10;
+const MANUAL_CAPACITY_STORAGE_KEY = "foxess_battery_capacity";
+const MANUAL_MIN_SOC_STORAGE_KEY = "foxess_min_soc";
+const DETECTED_CAPACITY_STORAGE_KEY = "foxess_battery_capacity_detected";
+const DETECTED_MIN_SOC_STORAGE_KEY = "foxess_min_soc_detected";
 
 function parsePercent(value, fallback) {
   if (value === null || value === undefined || value === "") return fallback;
@@ -30,18 +34,84 @@ function parsePercent(value, fallback) {
   return Math.max(0, Math.min(100, numeric));
 }
 
-const batteryEstimateOptions = {
-  showEstimate: true,
-  capacityKwh:
-    Number(
-      window.__foxessBatteryCapacity ??
-        parseFloat(localStorage.getItem("foxess_battery_capacity") || "0")
-    ) || 0,
-  minSocPercent: parsePercent(
-    window.__foxessMinSoc ?? localStorage.getItem("foxess_min_soc"),
+function parseCapacity(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function readStoredValue(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (err) {
+    return null;
+  }
+}
+
+function writeStoredValue(key, value) {
+  try {
+    if (value === null || value === undefined) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, String(value));
+    }
+  } catch (err) {
+    // Ignore storage errors; the in-memory values stay authoritative.
+  }
+}
+
+/**
+ * The effective battery figures are resolved from two sources:
+ *   - values detected from the FoxESS page/API responses, and
+ *   - values the user entered in the popup (fallback / override).
+ *
+ * Auto-detect can be turned off, in which case only the manual values count.
+ */
+const batterySources = {
+  autoDetect: true,
+  manualCapacityKwh: parseCapacity(
+    window.__foxessBatteryCapacity ?? readStoredValue(MANUAL_CAPACITY_STORAGE_KEY)
+  ),
+  manualMinSocPercent: parsePercent(
+    window.__foxessMinSoc ?? readStoredValue(MANUAL_MIN_SOC_STORAGE_KEY),
     DEFAULT_MIN_SOC_PERCENT
+  ),
+  detectedCapacityKwh: parseCapacity(
+    readStoredValue(DETECTED_CAPACITY_STORAGE_KEY)
+  ),
+  detectedMinSocPercent: parsePercent(
+    readStoredValue(DETECTED_MIN_SOC_STORAGE_KEY),
+    null
   )
 };
+
+const batteryEstimateOptions = {
+  showEstimate: true,
+  capacityKwh: 0,
+  minSocPercent: DEFAULT_MIN_SOC_PERCENT
+};
+
+function applyBatterySources() {
+  const { autoDetect, detectedCapacityKwh, manualCapacityKwh } = batterySources;
+
+  batteryEstimateOptions.capacityKwh =
+    autoDetect && detectedCapacityKwh > 0
+      ? detectedCapacityKwh
+      : manualCapacityKwh > 0
+        ? manualCapacityKwh
+        : 0;
+
+  batteryEstimateOptions.minSocPercent =
+    autoDetect && batterySources.detectedMinSocPercent !== null
+      ? batterySources.detectedMinSocPercent
+      : batterySources.manualMinSocPercent;
+
+  window.__foxessBatteryCapacity = batteryEstimateOptions.capacityKwh;
+  window.__foxessMinSoc = batteryEstimateOptions.minSocPercent;
+
+  updateBatteryEstimateDisplay();
+}
+
+applyBatterySources();
 
 function formatDuration(hours) {
   const totalMinutes = Math.round(hours * 60);
@@ -199,42 +269,109 @@ function updateFlowDotWidth(show) {
 }
 
 export function setBatteryCapacity(value) {
-  const capacity = Number(value) || 0;
-  batteryEstimateOptions.capacityKwh = capacity;
-  window.__foxessBatteryCapacity = capacity;
+  const capacity = parseCapacity(value);
+  batterySources.manualCapacityKwh = capacity;
+  writeStoredValue(
+    MANUAL_CAPACITY_STORAGE_KEY,
+    capacity > 0 ? capacity : null
+  );
 
-  if (capacity > 0) {
-    try {
-      localStorage.setItem("foxess_battery_capacity", String(capacity));
-    } catch (err) {
-      console.warn(
-        "[FoxESS] failed to save battery capacity to page localStorage",
-        err
-      );
-    }
-  } else {
-    try {
-      localStorage.removeItem("foxess_battery_capacity");
-    } catch (err) {
-      // Ignore storage errors; the in-memory value is authoritative.
-    }
-  }
-
-  updateBatteryEstimateDisplay();
+  applyBatterySources();
 }
 
 export function setBatteryMinSoc(value) {
   const minSoc = parsePercent(value, DEFAULT_MIN_SOC_PERCENT);
-  batteryEstimateOptions.minSocPercent = minSoc;
-  window.__foxessMinSoc = minSoc;
+  batterySources.manualMinSocPercent = minSoc;
+  writeStoredValue(MANUAL_MIN_SOC_STORAGE_KEY, minSoc);
 
-  try {
-    localStorage.setItem("foxess_min_soc", String(minSoc));
-  } catch (err) {
-    // Ignore storage errors; the in-memory value is authoritative.
+  applyBatterySources();
+}
+
+/** Toggle whether API-detected values override the manual popup values. */
+export function setBatteryAutoDetect(value) {
+  batterySources.autoDetect = !!value;
+  applyBatterySources();
+}
+
+/** True once a capacity has been detected from (or restored via) FoxESS. */
+export function hasDetectedBatteryCapacity() {
+  return batterySources.detectedCapacityKwh > 0;
+}
+
+/** True once a minimum SOC has been detected from (or restored via) FoxESS. */
+export function hasDetectedMinSoc() {
+  return batterySources.detectedMinSocPercent !== null;
+}
+
+/** Capacity (kWh) detected from a FoxESS API response. */
+export function setBatteryCapacityDetected(value) {
+  const capacity = parseCapacity(value);
+  if (capacity <= 0 || batterySources.detectedCapacityKwh === capacity) return;
+
+  batterySources.detectedCapacityKwh = capacity;
+  writeStoredValue(DETECTED_CAPACITY_STORAGE_KEY, capacity);
+
+  console.info("[FoxESS] battery capacity detected:", capacity, "kWh");
+  if (window.__foxessBatteryDebug) {
+    window.__foxessBatteryDebug.detectedCapacity = capacity;
   }
 
-  updateBatteryEstimateDisplay();
+  applyBatterySources();
+  reportDetectedBatteryInfo();
+}
+
+/** Minimum/discharge-floor SOC (%) detected from a FoxESS API response. */
+export function setBatteryMinSocDetected(value) {
+  const minSoc = parsePercent(value, null);
+  if (minSoc === null || batterySources.detectedMinSocPercent === minSoc) {
+    return;
+  }
+
+  batterySources.detectedMinSocPercent = minSoc;
+  writeStoredValue(DETECTED_MIN_SOC_STORAGE_KEY, minSoc);
+
+  console.info("[FoxESS] min SOC detected:", minSoc, "%");
+  if (window.__foxessBatteryDebug) {
+    window.__foxessBatteryDebug.detectedMinSoc = minSoc;
+  }
+
+  applyBatterySources();
+  reportDetectedBatteryInfo();
+}
+
+let lastReportedCapacity = null;
+let lastReportedMinSoc = null;
+
+/**
+ * Send detected values to the isolated-world bridge so the popup can display
+ * them. Reports are sent only when a value actually changes, except when
+ * `force` is set (the bridge may not have been listening when the values were
+ * restored from storage at startup).
+ */
+export function reportDetectedBatteryInfo(force = false) {
+  const capacity = batterySources.detectedCapacityKwh;
+  const minSoc = batterySources.detectedMinSocPercent;
+
+  if (!force && capacity === lastReportedCapacity && minSoc === lastReportedMinSoc) {
+    return;
+  }
+
+  lastReportedCapacity = capacity;
+  lastReportedMinSoc = minSoc;
+
+  try {
+    window.postMessage(
+      {
+        source: "foxesscloud-extension",
+        type: "DETECTED_BATTERY_INFO",
+        detectedBatteryCapacityKwh: capacity > 0 ? capacity : null,
+        detectedMinSocPercent: minSoc
+      },
+      "*"
+    );
+  } catch (err) {
+    // Reporting is best effort; the page still uses the detected values.
+  }
 }
 
 export function toggleBatteryEstimate(show) {

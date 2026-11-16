@@ -11,10 +11,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     showSolarPercent: true,
     showSolarHistory: true,
     showBatteryEstimate: true,
+    autoDetectBattery: true,
     batteryCapacityKwh: 0,
     minSocPercent: 10,
   };
+  // Detected values are reported by the page; they are shown here but are not
+  // user-editable settings.
+  const DETECTED_DEFAULTS = {
+    detectedBatteryCapacityKwh: null,
+    detectedMinSocPercent: null,
+  };
   const KEYS = Object.keys(DEFAULTS);
+  const DETECTED_KEYS = Object.keys(DETECTED_DEFAULTS);
 
   const controls = {
     unstackCharts: document.getElementById("unstackCharts"),
@@ -25,8 +33,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     showSolarPercent: document.getElementById("showSolarPercent"),
     showSolarHistory: document.getElementById("showSolarHistory"),
     showBatteryEstimate: document.getElementById("showBatteryEstimate"),
+    autoDetectBattery: document.getElementById("autoDetectBattery"),
+    batteryManualFields: document.getElementById("batteryManualFields"),
+    detectedCapacityText: document.getElementById("detectedCapacityText"),
+    detectedMinSocText: document.getElementById("detectedMinSocText"),
     batteryCapacityKwh: document.getElementById("batteryCapacityKwh"),
     minSocPercent: document.getElementById("minSocPercent"),
+    batteryDetectLog: document.getElementById("batteryDetectLog"),
   };
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -36,17 +49,58 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const storage = chrome.storage?.local;
+  const isFoxessTab = /^https:\/\/www\.foxesscloud\.com\//.test(tab.url || "");
+  let pageState = null;
+
+  // The page bundle keeps detected values in the page's localStorage and in
+  // `window.__foxessBatteryDebug`. Running in the MAIN world lets us read both,
+  // and the build marker reveals a stale page script: refreshing the page does
+  // not reload unpacked-extension content scripts.
+  const readPageState = () =>
+    chrome.scripting
+      .executeScript({
+        target: { tabId: tab.id },
+        world: "MAIN",
+        func: () => ({
+          build: window.__foxessBuild ?? null,
+          debug: window.__foxessBatteryDebug ?? null,
+          capacity: localStorage.getItem("foxess_battery_capacity_detected"),
+          minSoc: localStorage.getItem("foxess_min_soc_detected"),
+        }),
+      })
+      .then((results) => results?.[0]?.result || null)
+      .catch(() => null);
 
   const readStored = () =>
     new Promise((resolve) => {
       if (!storage) {
-        resolve({ ...DEFAULTS });
+        resolve({ ...DEFAULTS, ...DETECTED_DEFAULTS });
         return;
       }
-      storage.get(KEYS, (stored) => resolve({ ...DEFAULTS, ...stored }));
+      storage.get([...KEYS, ...DETECTED_KEYS], (stored) =>
+        resolve({ ...DEFAULTS, ...DETECTED_DEFAULTS, ...stored }),
+      );
     });
 
   const settings = await readStored();
+
+  /** Copy detected values found in the page's own storage over the snapshot. */
+  const applyPageState = () => {
+    if (!pageState) return;
+
+    const capacity = Number(pageState.capacity);
+    if (Number.isFinite(capacity) && capacity > 0) {
+      settings.detectedBatteryCapacityKwh = capacity;
+    }
+
+    const minSoc = pageState.minSoc === null ? NaN : Number(pageState.minSoc);
+    if (Number.isFinite(minSoc)) {
+      settings.detectedMinSocPercent = minSoc;
+    }
+  };
+
+  pageState = await readPageState();
+  applyPageState();
 
   const syncInputs = () => {
     controls.unstackCharts.checked = Boolean(settings.unstackCharts);
@@ -57,9 +111,118 @@ document.addEventListener("DOMContentLoaded", async () => {
     controls.showSolarPercent.checked = Boolean(settings.showSolarPercent);
     controls.showSolarHistory.checked = Boolean(settings.showSolarHistory);
     controls.showBatteryEstimate.checked = Boolean(settings.showBatteryEstimate);
+    controls.autoDetectBattery.checked = Boolean(settings.autoDetectBattery);
     controls.batteryCapacityKwh.value =
       settings.batteryCapacityKwh === 0 ? "" : settings.batteryCapacityKwh;
     controls.minSocPercent.value = settings.minSocPercent;
+
+    // With auto-detect on, a detected value wins over the manual one, so the
+    // matching input is disabled — but only once something was actually
+    // detected. Otherwise the manual value stays editable as the fallback.
+    const autoDetect = Boolean(settings.autoDetectBattery);
+    const detectedCapacity = Number(settings.detectedBatteryCapacityKwh);
+    const hasDetectedCapacity =
+      Number.isFinite(detectedCapacity) && detectedCapacity > 0;
+    const hasDetectedMinSoc =
+      settings.detectedMinSocPercent !== null &&
+      settings.detectedMinSocPercent !== undefined &&
+      Number.isFinite(Number(settings.detectedMinSocPercent));
+
+    controls.batteryCapacityKwh.disabled = autoDetect && hasDetectedCapacity;
+    controls.minSocPercent.disabled = autoDetect && hasDetectedMinSoc;
+    controls.batteryManualFields.style.opacity =
+      autoDetect && (hasDetectedCapacity || hasDetectedMinSoc) ? "0.55" : "1";
+
+    controls.detectedCapacityText.textContent = hasDetectedCapacity
+      ? `${detectedCapacity} kWh`
+      : settings.autoDetectBattery
+        ? "not detected yet"
+        : "ignored (auto-detect off)";
+
+    controls.detectedMinSocText.textContent = hasDetectedMinSoc
+      ? `${Number(settings.detectedMinSocPercent)} %`
+      : settings.autoDetectBattery
+        ? "not detected yet"
+        : "ignored (auto-detect off)";
+
+    renderDiagnostics(hasDetectedCapacity, hasDetectedMinSoc);
+  };
+
+  /**
+   * Explain *why* nothing was detected: stale page script, or a page whose API
+   * responses simply do not carry a capacity value.
+   */
+  const renderDiagnostics = (hasDetectedCapacity, hasDetectedMinSoc) => {
+    const log = controls.batteryDetectLog;
+    if (!log) return;
+
+    log.style.color = "#888";
+    log.style.whiteSpace = "pre-line";
+
+    if (!isFoxessTab) {
+      log.textContent = "Open the FoxESS Cloud dashboard to detect values.";
+      return;
+    }
+
+    if (!pageState?.build) {
+      log.style.color = "#c0392b";
+      log.textContent =
+        "Page script not running. Reload the extension at chrome://extensions, then refresh this page.";
+      return;
+    }
+
+    const debug = pageState.debug || {};
+    const parts = [];
+
+    if (Number.isFinite(Number(debug.apiResponses))) {
+      parts.push(`${debug.apiResponses} API responses read`);
+    }
+
+    if (!hasDetectedCapacity) {
+      const candidate = debug.lastCapacityCandidate;
+      const fields = Array.isArray(debug.capacityFields)
+        ? debug.capacityFields.slice(-6)
+        : [];
+
+      if (candidate) {
+        parts.push(
+          `Capacity candidate: ${candidate.key}=${candidate.value} (${candidate.url})`,
+        );
+      }
+
+      if (fields.length) {
+        parts.push(`Capacity fields: ${fields.join(", ")}`);
+      }
+
+      const paths = Array.isArray(debug.apiPaths)
+        ? debug.apiPaths.slice(-8)
+        : [];
+      parts.push(
+        paths.length
+          ? `API paths: ${paths.join(", ")}`
+          : "No FoxESS API responses seen yet — open the plant page.",
+      );
+
+      if (debug.autoFetchStage) {
+        parts.push(
+          `Auto-fetch: ${debug.autoFetchStage}` +
+            (debug.autoFetchError ? ` (${debug.autoFetchError})` : "") +
+            (debug.autoFetchErrno ? ` errno ${debug.autoFetchErrno}` : ""),
+        );
+      }
+    }
+
+    if (!hasDetectedMinSoc) {
+      const candidate = debug.lastMinSocCandidate;
+      if (candidate) {
+        parts.push(`SOC candidate: ${candidate.key}=${candidate.value}`);
+      }
+      parts.push(
+        "Min SOC comes from the battery settings API (backup reserve).",
+      );
+    }
+
+    log.textContent = parts.join("\n");
   };
 
   const sendSnapshot = () => {
@@ -91,6 +254,31 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Apply the stored snapshot even when the page missed it during boot.
   sendSnapshot();
 
+  // Ask the page to fetch the capacity if it has not been detected yet. The
+  // page can sign its own API calls, so this works on any FoxESS screen.
+  const requestRefresh = () => {
+    if (isFoxessTab && !settings.detectedBatteryCapacityKwh) {
+      chrome.scripting
+        .executeScript({
+          target: { tabId: tab.id },
+          world: "ISOLATED",
+          func: (message) => window.postMessage(message, "*"),
+          args: [{ source: SOURCE, type: "REFRESH_BATTERY_DETECTION" }],
+        })
+        .catch(() => null);
+    }
+  };
+
+  // Keep the detected display live while the popup is open: the dashboard may
+  // fetch its data a moment after the popup opens.
+  const refreshFromPage = async () => {
+    pageState = await readPageState();
+    applyPageState();
+    syncInputs();
+  };
+  requestRefresh();
+  setInterval(refreshFromPage, 1500);
+
   controls.unstackCharts.addEventListener("change", (e) =>
     update("unstackCharts", e.target.checked),
   );
@@ -115,6 +303,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   controls.showBatteryEstimate.addEventListener("change", (e) =>
     update("showBatteryEstimate", e.target.checked),
   );
+  controls.autoDetectBattery.addEventListener("change", (e) => {
+    update("autoDetectBattery", e.target.checked);
+    syncInputs();
+  });
 
   const updateCapacity = (value) => {
     const numeric = parseFloat(value);
@@ -149,7 +341,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
       let changed = false;
-      for (const key of KEYS) {
+      for (const key of [...KEYS, ...DETECTED_KEYS]) {
         if (key in changes) {
           settings[key] = changes[key].newValue;
           changed = true;

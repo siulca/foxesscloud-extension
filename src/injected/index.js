@@ -22,15 +22,26 @@ import {
   toggleBatteryEstimate,
   setBatteryCapacity,
   setBatteryMinSoc,
+  setBatteryAutoDetect,
+  setBatteryCapacityDetected,
+  setBatteryMinSocDetected,
+  reportDetectedBatteryInfo,
 } from "./progress-bar/vertical.js";
 import { initializeWebSocketInterceptor } from "./websocket/ws.js";
 import { applyToAllCharts } from "./chart/unstack.js";
 import { startDomObserver, syncDashboardNow } from "./dom.js";
 // Side-effect import: installs fetch + XHR interceptors immediately.
-import "./interceptor/api.js";
+import { refreshBatteryFromApi } from "./interceptor/api.js";
 
 const SOURCE = "foxesscloud-extension";
 const STYLE_ID = "foxesscloud-styles";
+
+/**
+ * Marker read by the popup (MAIN-world `executeScript`). Reloading the page
+ * does not reload unpacked-extension content scripts, so the popup uses this to
+ * tell the user that chrome://extensions needs a reload.
+ */
+window.__foxessBuild = "2026-11-16";
 
 // Install the WebSocket patch before any page script can create a socket.
 initializeWebSocketInterceptor();
@@ -108,6 +119,9 @@ function applySettings(settings) {
   if (typeof settings.showBatteryEstimate === "boolean") {
     toggleBatteryEstimate(settings.showBatteryEstimate);
   }
+  if (typeof settings.autoDetectBattery === "boolean") {
+    setBatteryAutoDetect(settings.autoDetectBattery);
+  }
   if (
     settings.batteryCapacityKwh !== undefined &&
     settings.batteryCapacityKwh !== null
@@ -120,6 +134,25 @@ function applySettings(settings) {
   ) {
     setBatteryMinSoc(settings.minSocPercent);
   }
+
+  // Detected values survive reloads in the page's localStorage; carrying them
+  // in the snapshot as well keeps them when the popup has newer data.
+  if (
+    settings.detectedBatteryCapacityKwh !== undefined &&
+    settings.detectedBatteryCapacityKwh !== null
+  ) {
+    setBatteryCapacityDetected(settings.detectedBatteryCapacityKwh);
+  }
+  if (
+    settings.detectedMinSocPercent !== undefined &&
+    settings.detectedMinSocPercent !== null
+  ) {
+    setBatteryMinSocDetected(settings.detectedMinSocPercent);
+  }
+
+  // The bridge is definitely listening now: re-broadcast whatever was detected
+  // (or restored) so the popup can display it.
+  reportDetectedBatteryInfo(true);
 
   // Host elements may not exist yet; this is a no-op until they do.
   ensureSolarGauge();
@@ -183,8 +216,18 @@ window.addEventListener("message", (event) => {
       setBatteryMinSoc(data.value);
       break;
 
+    case "REFRESH_BATTERY_DETECTION":
+      // The popup asks for a fresh attempt (e.g. after a page reload where the
+      // dashboard had not yet requested the plant detail).
+      refreshBatteryFromApi(true);
+      break;
+
     case "FOXESS_READY":
       // Our own announcement; ignore.
+      break;
+
+    case "DETECTED_BATTERY_INFO":
+      // Emitted by this page for the bridge/popup; nothing to apply here.
       break;
 
     default:

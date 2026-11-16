@@ -20,9 +20,17 @@
     showSolarPercent: true,
     showSolarHistory: true,
     showBatteryEstimate: true,
+    autoDetectBattery: true,
     batteryCapacityKwh: 0,
     minSocPercent: 10,
   };
+
+  // Values detected from the FoxESS API. They are read alongside the settings
+  // but are not user-editable, so changing them must not trigger a re-send.
+  const DETECTED_KEYS = [
+    "detectedBatteryCapacityKwh",
+    "detectedMinSocPercent",
+  ];
 
   const KEYS = Object.keys(DEFAULTS);
 
@@ -39,14 +47,33 @@
       return;
     }
 
-    chrome.storage.local.get(KEYS, (stored) => {
+    chrome.storage.local.get([...KEYS, ...DETECTED_KEYS], (stored) => {
       sendSettings({ ...DEFAULTS, ...stored });
     });
   }
 
+  function persistDetectedValues(data) {
+    if (!chrome?.storage?.local) return;
+
+    const update = {};
+    for (const key of DETECTED_KEYS) {
+      if (data[key] !== undefined) update[key] = data[key];
+    }
+
+    if (Object.keys(update).length) chrome.storage.local.set(update);
+  }
+
   window.addEventListener("message", (event) => {
     if (event.data?.source !== SOURCE) return;
-    if (event.data.type === "FOXESS_READY") loadAndSend();
+
+    if (event.data.type === "FOXESS_READY") {
+      loadAndSend();
+      return;
+    }
+
+    if (event.data.type === "DETECTED_BATTERY_INFO") {
+      persistDetectedValues(event.data);
+    }
   });
 
   if (chrome?.storage?.onChanged) {

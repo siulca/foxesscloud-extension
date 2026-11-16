@@ -12,7 +12,7 @@ A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful q
 - **Unstack Charts**: On by default — Switch between stacked and unstacked view for ECharts bar and line charts
 - **Sankey Diagram**: On by default — Add an energy flow Sankey diagram to the energy stats page, which replaces the Supply/Usage panel
 - **Solar Production Gauge**: On by default — Real-time solar power gauge (vertical progress bar) showing current output as a percentage of PV capacity
-- **Battery Estimate**: Adds time-to-full / time-to-empty estimates to the battery tile, using the configured battery capacity and minimum SOC (default 10 %)
+- **Battery Estimate**: Adds time-to-full / time-to-empty estimates to the battery tile. Battery capacity and minimum SOC are auto-detected from the FoxESS API (manual values in the popup act as a fallback)
 
 ## Installation
 
@@ -21,6 +21,12 @@ A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful q
 3. Enable **Developer mode** (top right)
 4. Click **"Load unpacked"** and select the **`dist/`** folder
 5. Visit [https://www.foxesscloud.com/v2/](https://www.foxesscloud.com/v2/) and log in
+
+> After rebuilding or updating `dist/`, click the reload icon for the extension
+> on `chrome://extensions/` **and then refresh the FoxESS page**. Refreshing the
+> page alone keeps the old content script running, so new detection code will
+> not take effect. The popup warns you when the page is still running an old
+> script.
 
 ## Usage
 
