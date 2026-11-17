@@ -30,6 +30,8 @@
   const DETECTED_KEYS = [
     "detectedBatteryCapacityKwh",
     "detectedMinSocPercent",
+    "detectedBatteryCapacityAt",
+    "detectedMinSocAt",
   ];
 
   const KEYS = Object.keys(DEFAULTS);

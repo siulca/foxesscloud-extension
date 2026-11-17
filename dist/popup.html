@@ -1,6 +1,7 @@
 <!doctype html>
 <html>
   <head>
+    <meta charset="UTF-8" />
     <title>Fox ESS Cloud V2 Controls</title>
     <style>
       body {
@@ -100,49 +101,80 @@
           Show battery estimate
         </label>
       </div>
-      <label class="checkbox-label">
-        <input
-          id="autoDetectBattery"
-          type="checkbox"
-          checked
-          style="margin-right: 8px"
-        />
-        Auto-detect from FoxESS
-      </label>
-      <div
-        id="batteryDetected"
-        style="
-          margin-left: 12px;
-          font-size: 12px;
-          color: #666;
-          line-height: 1.5;
-        "
-      >
-        Capacity: <span id="detectedCapacityText">not detected yet</span><br />
-        Min SOC: <span id="detectedMinSocText">not detected yet</span>
-        <div id="batteryDetectLog" style="margin-top: 4px; color: #888"></div>
+      <div style="display: flex; gap: 16px; margin: 10px 0 6px">
+        <label>
+          <input
+            id="batteryModeAuto"
+            type="radio"
+            name="batteryMode"
+            value="auto"
+            checked
+            style="margin-right: 6px"
+          />
+          Auto-detect
+        </label>
+        <label>
+          <input
+            id="batteryModeManual"
+            type="radio"
+            name="batteryMode"
+            value="manual"
+            style="margin-right: 6px"
+          />
+          Manual
+        </label>
       </div>
-      <div id="batteryManualFields" style="margin-left: 12px; margin-top: 8px">
-        <label style="display: flex; align-items: center; gap: 8px">
-          <span>Max Capacity (kWh)</span>
+      <div
+        id="batteryAutoPanel"
+        style="margin-left: 12px; font-size: 12px; color: #444"
+      >
+        <div style="line-height: 1.7">
+          Capacity:
+          <span id="detectedCapacityText">not detected yet</span>
+          <span id="detectedCapacityAge" style="color: #999"></span><br />
+          Min SOC:
+          <span id="detectedMinSocText">not detected yet</span>
+          <span id="detectedMinSocAge" style="color: #999"></span>
+        </div>
+        <div id="batteryFreshness" style="margin-top: 4px; color: #888"></div>
+        <button
+          id="refreshBatteryBtn"
+          type="button"
+          style="
+            margin-top: 8px;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
+          "
+        >
+          Refresh from FoxESS
+        </button>
+        <div
+          id="batteryDetectLog"
+          style="margin-top: 6px; color: #888; white-space: pre-line"
+        ></div>
+      </div>
+      <div
+        id="batteryManualFields"
+        style="display: none; margin-left: 12px; margin-top: 8px"
+      >
+        <label style="display: block; margin-top: 8px">
+          <span style="display: block; margin-bottom: 4px"
+            >Max Capacity (kWh)</span
+          >
           <input
             id="batteryCapacityKwh"
             type="number"
             min="0"
             step="0.1"
-            style="width: 80px"
+            style="width: 90px"
           />
         </label>
 
-        <label
-          style="
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 8px;
-          "
-        >
-          <span title="On-grid discharge floor (Battery Reserve Capacity)"
+        <label style="display: block; margin-top: 10px">
+          <span
+            style="display: block; margin-bottom: 4px"
+            title="On-grid discharge floor (Battery Reserve Capacity)"
             >Min SOC (%)</span
           >
           <input
@@ -152,11 +184,11 @@
             max="100"
             step="1"
             placeholder="%"
-            style="width: 80px"
+            style="width: 90px"
           />
         </label>
         <div style="font-size: 11px; color: #888; margin-top: 6px">
-          Used when auto-detect is off or nothing has been detected yet.
+          Used while manual mode is selected.
         </div>
       </div>
     </div>

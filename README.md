@@ -32,6 +32,10 @@ A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful q
 
 - Click the extension icon to open the popup controls
 - Toggle the checkboxes to turn features on/off
+- **Battery estimate** defaults to **Auto-detect**, which reads the capacity and
+  minimum SOC from the FoxESS API. Each value shows how long ago it was fetched;
+  press **Refresh from FoxESS** to re-read it now. Switch to **Manual** to enter
+  your own values instead.
 
 ## Development
 

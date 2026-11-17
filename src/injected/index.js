@@ -41,7 +41,7 @@ const STYLE_ID = "foxesscloud-styles";
  * does not reload unpacked-extension content scripts, so the popup uses this to
  * tell the user that chrome://extensions needs a reload.
  */
-window.__foxessBuild = "2026-11-16";
+window.__foxessBuild = "2026-11-17";
 
 // Install the WebSocket patch before any page script can create a socket.
 initializeWebSocketInterceptor();

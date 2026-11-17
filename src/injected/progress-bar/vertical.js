@@ -24,6 +24,21 @@ const MANUAL_CAPACITY_STORAGE_KEY = "foxess_battery_capacity";
 const MANUAL_MIN_SOC_STORAGE_KEY = "foxess_min_soc";
 const DETECTED_CAPACITY_STORAGE_KEY = "foxess_battery_capacity_detected";
 const DETECTED_MIN_SOC_STORAGE_KEY = "foxess_min_soc_detected";
+const DETECTED_CAPACITY_AT_STORAGE_KEY = "foxess_battery_capacity_detected_at";
+const DETECTED_MIN_SOC_AT_STORAGE_KEY = "foxess_min_soc_detected_at";
+
+/** When each detected value was last written, so the popup can show its age. */
+let detectedCapacityAt = parseTimestamp(
+  readStoredValue(DETECTED_CAPACITY_AT_STORAGE_KEY)
+);
+let detectedMinSocAt = parseTimestamp(
+  readStoredValue(DETECTED_MIN_SOC_AT_STORAGE_KEY)
+);
+
+function parseTimestamp(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
 
 function parsePercent(value, fallback) {
   if (value === null || value === undefined || value === "") return fallback;
@@ -306,14 +321,18 @@ export function hasDetectedMinSoc() {
 /** Capacity (kWh) detected from a FoxESS API response. */
 export function setBatteryCapacityDetected(value) {
   const capacity = parseCapacity(value);
-  if (capacity <= 0 || batterySources.detectedCapacityKwh === capacity) return;
+  if (capacity <= 0) return;
 
+  const changed = batterySources.detectedCapacityKwh !== capacity;
   batterySources.detectedCapacityKwh = capacity;
+  detectedCapacityAt = Date.now();
   writeStoredValue(DETECTED_CAPACITY_STORAGE_KEY, capacity);
+  writeStoredValue(DETECTED_CAPACITY_AT_STORAGE_KEY, detectedCapacityAt);
 
-  console.info("[FoxESS] battery capacity detected:", capacity, "kWh");
+  if (changed) console.info("[FoxESS] battery capacity detected:", capacity, "kWh");
   if (window.__foxessBatteryDebug) {
     window.__foxessBatteryDebug.detectedCapacity = capacity;
+    window.__foxessBatteryDebug.detectedCapacityAt = detectedCapacityAt;
   }
 
   applyBatterySources();
@@ -323,16 +342,18 @@ export function setBatteryCapacityDetected(value) {
 /** Minimum/discharge-floor SOC (%) detected from a FoxESS API response. */
 export function setBatteryMinSocDetected(value) {
   const minSoc = parsePercent(value, null);
-  if (minSoc === null || batterySources.detectedMinSocPercent === minSoc) {
-    return;
-  }
+  if (minSoc === null) return;
 
+  const changed = batterySources.detectedMinSocPercent !== minSoc;
   batterySources.detectedMinSocPercent = minSoc;
+  detectedMinSocAt = Date.now();
   writeStoredValue(DETECTED_MIN_SOC_STORAGE_KEY, minSoc);
+  writeStoredValue(DETECTED_MIN_SOC_AT_STORAGE_KEY, detectedMinSocAt);
 
-  console.info("[FoxESS] min SOC detected:", minSoc, "%");
+  if (changed) console.info("[FoxESS] min SOC detected:", minSoc, "%");
   if (window.__foxessBatteryDebug) {
     window.__foxessBatteryDebug.detectedMinSoc = minSoc;
+    window.__foxessBatteryDebug.detectedMinSocAt = detectedMinSocAt;
   }
 
   applyBatterySources();
@@ -341,23 +362,33 @@ export function setBatteryMinSocDetected(value) {
 
 let lastReportedCapacity = null;
 let lastReportedMinSoc = null;
+let lastReportedCapacityAt = null;
+let lastReportedMinSocAt = null;
 
 /**
  * Send detected values to the isolated-world bridge so the popup can display
- * them. Reports are sent only when a value actually changes, except when
- * `force` is set (the bridge may not have been listening when the values were
- * restored from storage at startup).
+ * them. Reports are sent only when a value (or its timestamp) actually changes,
+ * except when `force` is set (the bridge may not have been listening when the
+ * values were restored from storage at startup).
  */
 export function reportDetectedBatteryInfo(force = false) {
   const capacity = batterySources.detectedCapacityKwh;
   const minSoc = batterySources.detectedMinSocPercent;
 
-  if (!force && capacity === lastReportedCapacity && minSoc === lastReportedMinSoc) {
+  if (
+    !force &&
+    capacity === lastReportedCapacity &&
+    minSoc === lastReportedMinSoc &&
+    detectedCapacityAt === lastReportedCapacityAt &&
+    detectedMinSocAt === lastReportedMinSocAt
+  ) {
     return;
   }
 
   lastReportedCapacity = capacity;
   lastReportedMinSoc = minSoc;
+  lastReportedCapacityAt = detectedCapacityAt;
+  lastReportedMinSocAt = detectedMinSocAt;
 
   try {
     window.postMessage(
@@ -365,7 +396,9 @@ export function reportDetectedBatteryInfo(force = false) {
         source: "foxesscloud-extension",
         type: "DETECTED_BATTERY_INFO",
         detectedBatteryCapacityKwh: capacity > 0 ? capacity : null,
-        detectedMinSocPercent: minSoc
+        detectedMinSocPercent: minSoc,
+        detectedBatteryCapacityAt: detectedCapacityAt,
+        detectedMinSocAt
       },
       "*"
     );

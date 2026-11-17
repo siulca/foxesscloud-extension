@@ -705,8 +705,9 @@ export async function refreshBatteryFromApi(force = false) {
       if (json) routeResponse(ESS_OVERVIEW_ENDPOINT, json);
     }
 
-    // Min SOC is stored per device, so it needs one extra lookup.
-    if (plantID && !hasDetectedMinSoc()) {
+    // Min SOC is stored per device, so it needs one extra lookup. A forced
+    // refresh re-reads it even when a (possibly stale) value is already known.
+    if (plantID && (force || !hasDetectedMinSoc())) {
       const deviceID = await resolveDeviceID(plantID);
       recordBatteryDebug({
         autoFetchStage: deviceID ? "device-id" : "no-device-id",
