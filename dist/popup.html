@@ -89,106 +89,106 @@
     <div
       style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd"
     >
-      <strong>Battery estimate</strong>
-      <div class="checkbox-label">
-        <label>
-          <input
-            id="showBatteryEstimate"
-            type="checkbox"
-            checked
-            style="margin-right: 8px"
-          />
-          Show battery estimate
-        </label>
-      </div>
-      <div style="display: flex; gap: 16px; margin: 10px 0 6px">
-        <label>
-          <input
-            id="batteryModeAuto"
-            type="radio"
-            name="batteryMode"
-            value="auto"
-            checked
-            style="margin-right: 6px"
-          />
-          Auto-detect
-        </label>
-        <label>
-          <input
-            id="batteryModeManual"
-            type="radio"
-            name="batteryMode"
-            value="manual"
-            style="margin-right: 6px"
-          />
-          Manual
-        </label>
-      </div>
-      <div
-        id="batteryAutoPanel"
-        style="margin-left: 12px; font-size: 12px; color: #444"
-      >
-        <div style="line-height: 1.7">
-          Capacity:
-          <span id="detectedCapacityText">not detected yet</span>
-          <span id="detectedCapacityAge" style="color: #999"></span><br />
-          Min SOC:
-          <span id="detectedMinSocText">not detected yet</span>
-          <span id="detectedMinSocAge" style="color: #999"></span>
-        </div>
-        <div id="batteryFreshness" style="margin-top: 4px; color: #888"></div>
-        <button
-          id="refreshBatteryBtn"
-          type="button"
-          style="
-            margin-top: 8px;
-            padding: 2px 8px;
-            font-size: 11px;
-            cursor: pointer;
-          "
-        >
-          Refresh from FoxESS
-        </button>
-        <div
-          id="batteryDetectLog"
-          style="margin-top: 6px; color: #888; white-space: pre-line"
-        ></div>
-      </div>
-      <div
-        id="batteryManualFields"
-        style="display: none; margin-left: 12px; margin-top: 8px"
-      >
-        <label style="display: block; margin-top: 8px">
-          <span style="display: block; margin-bottom: 4px"
-            >Max Capacity (kWh)</span
-          >
-          <input
-            id="batteryCapacityKwh"
-            type="number"
-            min="0"
-            step="0.1"
-            style="width: 90px"
-          />
-        </label>
+      <strong>Battery</strong>
+      <label class="checkbox-label">
+        <input
+          id="showBatteryEstimate"
+          type="checkbox"
+          checked
+          style="margin-right: 8px"
+        />
+        Show time estimate
+      </label>
 
-        <label style="display: block; margin-top: 10px">
-          <span
-            style="display: block; margin-bottom: 4px"
-            title="On-grid discharge floor (Battery Reserve Capacity)"
-            >Min SOC (%)</span
+      <div id="batterySettings" style="margin-left: 12px">
+        <div style="font-size: 14px; font-weight: bold; margin: 4px 0 6px">
+          Capacity and Min SOC
+        </div>
+        <select
+          id="batteryMode"
+          aria-label="Capacity and Min SOC source"
+          style="font-size: 14px; width: 100%; max-width: 190px"
+        >
+          <option value="auto">Auto-detect from FoxESS</option>
+          <option value="manual">Enter manually</option>
+        </select>
+
+        <div id="batteryAutoPanel">
+          <div
+            style="
+              display: grid;
+              grid-template-columns: 72px 1fr;
+              gap: 2px 8px;
+              font-size: 14px;
+              margin-top: 6px;
+            "
           >
-          <input
-            id="minSocPercent"
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            placeholder="%"
-            style="width: 90px"
-          />
-        </label>
-        <div style="font-size: 11px; color: #888; margin-top: 6px">
-          Used while manual mode is selected.
+            <span style="color: #555">Capacity</span>
+            <span id="detectedCapacityText">not detected yet</span>
+            <span style="color: #555">Min SOC</span>
+            <span id="detectedMinSocText">not detected yet</span>
+          </div>
+          <div
+            id="batteryFreshness"
+            style="font-size: 12px; color: #888; margin-top: 6px"
+          ></div>
+          <button
+            id="refreshBatteryBtn"
+            type="button"
+            style="
+              margin-top: 6px;
+              padding: 3px 8px;
+              font-size: 12px;
+              cursor: pointer;
+            "
+          >
+            Refresh from FoxESS
+          </button>
+          <details
+            id="batteryDetails"
+            style="font-size: 12px; color: #888; margin-top: 6px"
+          >
+            <summary style="cursor: pointer">Details</summary>
+            <div
+              id="batteryDetectLog"
+              style="margin-top: 4px; white-space: pre-line"
+            ></div>
+          </details>
+        </div>
+
+        <div id="batteryManualFields" style="display: none">
+          <label style="display: block; margin-top: 8px; font-size: 14px">
+            <span style="display: block; margin-bottom: 4px"
+              >Max Capacity (kWh)</span
+            >
+            <input
+              id="batteryCapacityKwh"
+              type="number"
+              min="0"
+              step="0.1"
+              style="width: 90px; font-size: 14px"
+            />
+          </label>
+
+          <label style="display: block; margin-top: 10px; font-size: 14px">
+            <span
+              style="display: block; margin-bottom: 4px"
+              title="On-grid discharge floor (Battery Reserve Capacity)"
+              >Min SOC (%)</span
+            >
+            <input
+              id="minSocPercent"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              placeholder="%"
+              style="width: 90px; font-size: 14px"
+            />
+          </label>
+          <div style="font-size: 12px; color: #888; margin-top: 6px">
+            Used while manual entry is selected.
+          </div>
         </div>
       </div>
     </div>

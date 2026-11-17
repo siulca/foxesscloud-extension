@@ -35,15 +35,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     showSolarPercent: document.getElementById("showSolarPercent"),
     showSolarHistory: document.getElementById("showSolarHistory"),
     showBatteryEstimate: document.getElementById("showBatteryEstimate"),
-    batteryModeAuto: document.getElementById("batteryModeAuto"),
-    batteryModeManual: document.getElementById("batteryModeManual"),
+    batterySettings: document.getElementById("batterySettings"),
+    batteryMode: document.getElementById("batteryMode"),
     batteryAutoPanel: document.getElementById("batteryAutoPanel"),
     batteryManualFields: document.getElementById("batteryManualFields"),
     detectedCapacityText: document.getElementById("detectedCapacityText"),
     detectedMinSocText: document.getElementById("detectedMinSocText"),
-    detectedCapacityAge: document.getElementById("detectedCapacityAge"),
-    detectedMinSocAge: document.getElementById("detectedMinSocAge"),
     batteryFreshness: document.getElementById("batteryFreshness"),
+    batteryDetails: document.getElementById("batteryDetails"),
     refreshBatteryBtn: document.getElementById("refreshBatteryBtn"),
     batteryCapacityKwh: document.getElementById("batteryCapacityKwh"),
     minSocPercent: document.getElementById("minSocPercent"),
@@ -138,16 +137,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   pageState = await readPageState();
   applyPageState();
 
-  /** ` · 12 min ago` style suffix, empty when the timestamp is unknown. */
+  /** "12 min ago" style text, empty when the timestamp is unknown. */
   const formatAge = (timestamp) => {
     const at = Number(timestamp);
     if (!Number.isFinite(at) || at <= 0) return "";
 
     const seconds = Math.max(0, (Date.now() - at) / 1000);
-    if (seconds < 120) return " · just now";
-    if (seconds < 3600) return ` · ${Math.round(seconds / 60)} min ago`;
-    if (seconds < 86400) return ` · ${Math.round(seconds / 3600)} h ago`;
-    return ` · ${Math.round(seconds / 86400)} d ago`;
+    if (seconds < 120) return "just now";
+    if (seconds < 3600) return `${Math.round(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.round(seconds / 3600)} h ago`;
+    return `${Math.round(seconds / 86400)} d ago`;
   };
 
   /** Was this value written during the current page load? */
@@ -174,11 +173,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       settings.showBatteryEstimate
     );
 
+    // The capacity/SOC settings only matter while the estimate is shown.
+    controls.batterySettings.style.display = settings.showBatteryEstimate
+      ? ""
+      : "none";
+
     // Auto-detect is the default and the two modes are mutually exclusive: only
     // one of the panels is visible at a time.
     const autoDetect = settings.autoDetectBattery !== false;
-    controls.batteryModeAuto.checked = autoDetect;
-    controls.batteryModeManual.checked = !autoDetect;
+    controls.batteryMode.value = autoDetect ? "auto" : "manual";
     controls.batteryAutoPanel.style.display = autoDetect ? "" : "none";
     controls.batteryManualFields.style.display = autoDetect ? "none" : "";
 
@@ -202,13 +205,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       ? `${detectedMinSoc} %`
       : "not detected yet";
 
-    controls.detectedCapacityAge.textContent = hasDetectedCapacity
-      ? formatAge(settings.detectedBatteryCapacityAt)
-      : "";
-    controls.detectedMinSocAge.textContent = hasDetectedMinSoc
-      ? formatAge(settings.detectedMinSocAt)
-      : "";
-
     renderFreshness(hasDetectedCapacity, hasDetectedMinSoc);
     renderDiagnostics(hasDetectedCapacity, hasDetectedMinSoc);
   };
@@ -230,7 +226,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!hasDetectedCapacity && !hasDetectedMinSoc) {
       node.style.color = "#888";
       node.textContent = isFoxessTab
-        ? "Not detected yet — the dashboard fetches this on load."
+        ? "Not detected yet."
         : "Open the FoxESS Cloud dashboard to detect values.";
       return;
     }
@@ -241,10 +237,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     ].filter((value) => Number(value) > 0);
 
     const allFresh = stamps.length > 0 && stamps.every(isFromThisLoad);
+    const age = stamps.length
+      ? formatAge(Math.min(...stamps.map(Number)))
+      : "";
+
     node.style.color = allFresh ? "#2e7d32" : "#b8860b";
-    node.textContent = allFresh
-      ? "Just fetched from FoxESS for this page load."
-      : "Saved earlier — press Refresh.";
+    if (!age) {
+      node.textContent = "Saved from an earlier visit. Press Refresh.";
+    } else if (allFresh) {
+      node.textContent = `Updated ${age}.`;
+    } else {
+      node.textContent = `Saved ${age}. Press Refresh.`;
+    }
   };
 
   /**
@@ -253,24 +257,25 @@ document.addEventListener("DOMContentLoaded", async () => {
    */
   const renderDiagnostics = (hasDetectedCapacity, hasDetectedMinSoc) => {
     const log = controls.batteryDetectLog;
-    if (!log) return;
+    const details = controls.batteryDetails;
+    if (!log || !details) return;
 
-    // Diagnostics are a troubleshooting aid: once both values are known the
-    // popup shows only the values themselves.
-    if (
-      !isFoxessTab ||
-      (!refreshIssue && hasDetectedCapacity && hasDetectedMinSoc)
-    ) {
+    // Diagnostics are a troubleshooting aid, tucked behind "Details" and only
+    // offered while something is still missing (or a refresh failed).
+    const needed =
+      isFoxessTab &&
+      (refreshIssue || !hasDetectedCapacity || !hasDetectedMinSoc);
+
+    details.style.display = needed ? "" : "none";
+    if (!needed) {
       log.textContent = "";
-      log.style.display = "none";
       return;
     }
 
-    log.style.display = "";
     log.style.color = "#888";
-    log.style.whiteSpace = "pre-line";
 
     if (!pageState?.build) {
+      details.open = true;
       log.style.color = "#c0392b";
       log.textContent =
         "Page script not running. Reload the extension at chrome://extensions, then refresh this page.";
@@ -306,7 +311,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       parts.push(
         paths.length
           ? `API paths: ${paths.join(", ")}`
-          : "No FoxESS API responses seen yet — open the plant page."
+          : "No FoxESS API responses seen yet. Open the plant page."
       );
 
       if (debug.autoFetchStage) {
@@ -389,7 +394,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     button.disabled = true;
-    button.textContent = "Refreshing…";
+    button.textContent = "Refreshing...";
     refreshIssue = null;
     const requestedAt = Date.now();
     refreshRequestedAt = requestedAt;
@@ -409,7 +414,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       Number(settings.detectedMinSocAt) || 0
     );
     if (newest < requestedAt - 2000) {
-      refreshIssue = "Refresh returned no new data.";
+      refreshIssue = "Refresh failed. No new data returned.";
       syncInputs();
     }
 
@@ -448,17 +453,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   controls.showSolarHistory.addEventListener("change", (e) =>
     update("showSolarHistory", e.target.checked)
   );
-  controls.showBatteryEstimate.addEventListener("change", (e) =>
-    update("showBatteryEstimate", e.target.checked)
-  );
-  controls.batteryModeAuto.addEventListener("change", (e) => {
-    if (!e.target.checked) return;
-    update("autoDetectBattery", true);
+  controls.showBatteryEstimate.addEventListener("change", (e) => {
+    update("showBatteryEstimate", e.target.checked);
     syncInputs();
   });
-  controls.batteryModeManual.addEventListener("change", (e) => {
-    if (!e.target.checked) return;
-    update("autoDetectBattery", false);
+  controls.batteryMode.addEventListener("change", (e) => {
+    update("autoDetectBattery", e.target.value === "auto");
     syncInputs();
   });
 
