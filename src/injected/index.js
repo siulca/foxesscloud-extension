@@ -218,8 +218,9 @@ window.addEventListener("message", (event) => {
 
     case "REFRESH_BATTERY_DETECTION":
       // The popup asks for a fresh attempt (e.g. after a page reload where the
-      // dashboard had not yet requested the plant detail).
-      refreshBatteryFromApi(true);
+      // dashboard had not yet requested the plant detail). Only its Refresh
+      // button forces new calls; opening the popup does not.
+      refreshBatteryFromApi(Boolean(data.force));
       break;
 
     case "FOXESS_READY":

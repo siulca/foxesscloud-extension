@@ -54,7 +54,7 @@ function parseCapacity(value) {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }
 
-function readStoredValue(key) {
+export function readStoredValue(key) {
   try {
     return localStorage.getItem(key);
   } catch (err) {
@@ -62,7 +62,7 @@ function readStoredValue(key) {
   }
 }
 
-function writeStoredValue(key, value) {
+export function writeStoredValue(key, value) {
   try {
     if (value === null || value === undefined) {
       localStorage.removeItem(key);
@@ -306,6 +306,11 @@ export function setBatteryMinSoc(value) {
 export function setBatteryAutoDetect(value) {
   batterySources.autoDetect = !!value;
   applyBatterySources();
+}
+
+/** False when the user chose "Enter manually" in the popup. */
+export function isBatteryAutoDetectEnabled() {
+  return batterySources.autoDetect;
 }
 
 /** True once a capacity has been detected from (or restored via) FoxESS. */

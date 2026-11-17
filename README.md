@@ -38,6 +38,11 @@ A Chrome extension that improves the Fox ESS Cloud (v2) experience with useful q
   **Refresh from FoxESS** to re-read them. Choose **Enter manually** to supply
   your own values instead. The capacity/min-SOC settings are hidden while
   **Show time estimate** is off.
+- Detection is cached, so reloading the page does not re-query FoxESS: detected
+  values are restored from storage and a single attempt is made per page load
+  only while something is still missing. A failed attempt is retried no more
+  than once every 5 minutes, **Enter manually** disables it entirely, and only
+  **Refresh from FoxESS** forces new calls.
 
 ## Development
 

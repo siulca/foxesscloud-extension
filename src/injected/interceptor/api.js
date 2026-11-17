@@ -11,7 +11,10 @@ import {
   setBatteryCapacityDetected,
   setBatteryMinSocDetected,
   hasDetectedBatteryCapacity,
-  hasDetectedMinSoc
+  hasDetectedMinSoc,
+  isBatteryAutoDetectEnabled,
+  readStoredValue,
+  writeStoredValue
 } from "../progress-bar/vertical.js";
 
 // ====================== ENDPOINTS ======================
@@ -39,6 +42,11 @@ const PRIORITY = {
 let capacityPriority = 0;
 let minSocPriority = 0;
 let apiResponseCount = 0;
+
+// Detection costs real API calls, so a page refresh is not a reason to repeat
+// it: values are cached in localStorage and the last attempt is timestamped.
+const DETECT_ATTEMPT_AT_KEY = "foxess_battery_detect_attempt_at";
+const DETECT_RETRY_COOLDOWN_MS = 5 * 60 * 1000;
 
 // ====================== HELPERS ======================
 
@@ -665,12 +673,28 @@ async function resolveDeviceID(plantID) {
 export async function refreshBatteryFromApi(force = false) {
   if (refreshInFlight) return;
 
-  // Never issue duplicate calls once a value is known, unless the popup
-  // explicitly asked for a refresh (the user may have switched plants).
-  if (!force && hasDetectedBatteryCapacity()) return;
+  if (!force) {
+    // Manual entry: the user's own values are authoritative, so nothing to do.
+    if (!isBatteryAutoDetectEnabled()) return;
+
+    // Cached values: reloading the page must not re-fetch them.
+    if (hasDetectedBatteryCapacity() && hasDetectedMinSoc()) return;
+
+    // A recent attempt that found nothing is not repeated on every reload;
+    // the popup's Refresh button bypasses this.
+    const lastAttempt = Number(readStoredValue(DETECT_ATTEMPT_AT_KEY));
+    if (
+      Number.isFinite(lastAttempt) &&
+      lastAttempt > 0 &&
+      Date.now() - lastAttempt < DETECT_RETRY_COOLDOWN_MS
+    ) {
+      return;
+    }
+  }
 
   refreshInFlight = true;
   refreshAttempts += 1;
+  if (!force) writeStoredValue(DETECT_ATTEMPT_AT_KEY, Date.now());
 
   try {
     recordBatteryDebug({ autoFetchAttempts: refreshAttempts });
@@ -681,7 +705,8 @@ export async function refreshBatteryFromApi(force = false) {
       autoFetchError: getLastRequestFailure()
     });
 
-    if (plantID) {
+    // Capacity is already cached: skip straight to the Min SOC lookup.
+    if (plantID && (force || !hasDetectedBatteryCapacity())) {
       const json = await signedRequest(PLANT_ENDPOINT, {
         params: { plantID }
       });
@@ -736,6 +761,6 @@ export async function refreshBatteryFromApi(force = false) {
 
 onAuthReady(() => {
   // Give the dashboard a moment to finish its own initial requests first.
+  // A single attempt per page load; the cooldown above covers reloads.
   setTimeout(refreshBatteryFromApi, 1200);
-  setTimeout(refreshBatteryFromApi, 7000);
 });

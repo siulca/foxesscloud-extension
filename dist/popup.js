@@ -380,7 +380,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         target: { tabId: tab.id },
         world: "ISOLATED",
         func: (message) => window.postMessage(message, "*"),
-        args: [{ source: SOURCE, type: "REFRESH_BATTERY_DETECTION" }]
+        args: [{ source: SOURCE, type: "REFRESH_BATTERY_DETECTION", force }]
       })
       .catch(() => null);
   };
