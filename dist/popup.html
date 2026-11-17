@@ -4,194 +4,353 @@
     <meta charset="UTF-8" />
     <title>Fox ESS Cloud V2 Controls</title>
     <style>
+      :root {
+        --bg: #f3f4f6;
+        --card: #ffffff;
+        --inset: #f9fafb;
+        --text: #111827;
+        --muted: #6b7280;
+        --label: #4b5563;
+        --line: #e5e7eb;
+        --border: #c8cdd4;
+        --accent: #1a73e8;
+        --radius: 8px;
+        --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.05);
+      }
+
       body {
-        width: 240px;
+        width: 272px;
+        margin: 0;
         padding: 12px;
-        font-family: Arial;
-      }
-      h3 {
-        margin-top: 0;
-      }
-      .checkbox-label {
-        display: block;
-        margin: 10px 0;
+        font-family: Arial, sans-serif;
         font-size: 14px;
+        color: var(--text);
+        background: var(--bg);
+      }
+
+      .app-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 2px 10px;
+      }
+
+      .app-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+      }
+
+      .app-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .card {
+        padding: 8px 10px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-card);
+      }
+
+      .card + .card {
+        margin-top: 10px;
+      }
+
+      .card-title {
+        margin: 2px 0 4px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* Every toggle uses the same row. */
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 -6px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        font-size: 14px;
+        line-height: 1.3;
+        cursor: pointer;
+      }
+
+      .row:hover {
+        background: rgba(17, 24, 39, 0.04);
+      }
+
+      .row input[type="checkbox"] {
+        flex: 0 0 auto;
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        accent-color: var(--accent);
+      }
+
+      .nested {
+        margin-left: 4px;
+        padding-left: 8px;
+        border-left: 2px solid var(--line);
+      }
+
+      .panel {
+        margin-top: 8px;
+        padding: 12px;
+        background: var(--inset);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+
+      .panel-title {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--label);
+      }
+
+      /* Select and number inputs share one look; .half is the only variant. */
+      .control {
+        box-sizing: border-box;
+        width: 100%;
+        height: 30px;
+        padding: 0 8px;
+        font-family: inherit;
+        font-size: 14px;
+        color: var(--text);
+        background-color: #fff;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+
+      .control:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: 0;
+        border-color: var(--accent);
+      }
+
+      .control.half {
+        width: 50%;
+      }
+
+      /* Custom chevron keeps a fixed inset instead of hugging the border. */
+      select.control {
+        appearance: none;
+        -webkit-appearance: none;
+        padding-right: 28px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 9px center;
+        background-size: 10px 6px;
+      }
+
+      .readout {
+        margin-top: 10px;
+      }
+
+      .readout-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 4px 0;
+        font-size: 14px;
+      }
+
+      /* One muted style for every secondary label. */
+      .readout-row .key,
+      .field {
+        color: var(--muted);
+      }
+
+      .readout-row .value {
+        font-weight: 600;
+        text-align: right;
+      }
+
+      .field {
+        display: block;
+        margin-top: 8px;
+        font-size: 14px;
+      }
+
+      .field .control {
+        display: block;
+        margin-top: 4px;
+      }
+
+      /* Secondary copy and the diagnostics disclosure. */
+      .hint,
+      .details {
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--muted);
+      }
+
+      .hint {
+        margin-top: 8px;
+      }
+
+      .details {
+        margin-top: 10px;
+      }
+
+      .details summary {
+        cursor: pointer;
+      }
+
+      .log {
+        margin-top: 4px;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+      }
+
+      .btn {
+        box-sizing: border-box;
+        height: 30px;
+        margin-top: 10px;
+        padding: 0 12px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .btn:hover {
+        background: #f3f4f6;
+      }
+
+      .btn:disabled {
+        opacity: 0.55;
+        cursor: default;
       }
     </style>
   </head>
   <body>
-    <h3>Fox ESS Cloud V2 Controls</h3>
-    <label class="checkbox-label">
-      <input id="unstackCharts" type="checkbox" style="margin-right: 8px" />
-      Unstack charts
-    </label>
-    <label class="checkbox-label">
-      <input
-        id="hideOpenTabs"
-        type="checkbox"
-        checked
-        style="margin-right: 8px"
-      />
-      Hide dashboard bloat elements
-    </label>
-    <label class="checkbox-label">
-      <input
-        id="showSankey"
-        type="checkbox"
-        checked
-        style="margin-right: 8px"
-      />
-      Show Sankey diagram
-    </label>
-    <div
-      style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd"
-    >
-      <strong>Solar production gauge</strong>
-      <label class="checkbox-label">
-        <input
-          id="showSolarGauge"
-          type="checkbox"
-          checked
-          style="margin-right: 8px"
-        />
+    <header class="app-header">
+      <img class="app-icon" src="icon.png" alt="" />
+      <h1 class="app-title">Fox ESS Cloud V2 Controls</h1>
+    </header>
+
+    <section class="card">
+      <h2 class="card-title">Dashboard</h2>
+      <label class="row">
+        <input id="unstackCharts" type="checkbox" />
+        Unstack charts
+      </label>
+      <label class="row">
+        <input id="hideOpenTabs" type="checkbox" checked />
+        Hide dashboard bloat elements
+      </label>
+      <label class="row">
+        <input id="showSankey" type="checkbox" checked />
+        Show Sankey diagram
+      </label>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Solar production gauge</h2>
+      <label class="row">
+        <input id="showSolarGauge" type="checkbox" checked />
         Show solar production gauge
       </label>
-      <div style="margin-left: 12px">
-        <label class="checkbox-label">
-          <input
-            id="showSolarCapacity"
-            type="checkbox"
-            checked
-            style="margin-right: 8px"
-          />
+      <div class="nested">
+        <label class="row">
+          <input id="showSolarCapacity" type="checkbox" checked />
           Total capacity
         </label>
-        <label class="checkbox-label">
-          <input
-            id="showSolarPercent"
-            type="checkbox"
-            checked
-            style="margin-right: 8px"
-          />
+        <label class="row">
+          <input id="showSolarPercent" type="checkbox" checked />
           Percent label
         </label>
-        <label class="checkbox-label">
-          <input
-            id="showSolarHistory"
-            type="checkbox"
-            checked
-            style="margin-right: 8px"
-          />
+        <label class="row">
+          <input id="showSolarHistory" type="checkbox" checked />
           1min history graph
         </label>
       </div>
-    </div>
-    <div
-      style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd"
-    >
-      <strong>Battery</strong>
-      <label class="checkbox-label">
-        <input
-          id="showBatteryEstimate"
-          type="checkbox"
-          checked
-          style="margin-right: 8px"
-        />
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Battery</h2>
+      <label class="row">
+        <input id="showBatteryEstimate" type="checkbox" checked />
         Show time estimate
       </label>
 
-      <div id="batterySettings" style="margin-left: 12px">
-        <div style="font-size: 14px; font-weight: bold; margin: 4px 0 6px">
-          Capacity and Min SOC
-        </div>
+      <div id="batterySettings" class="panel">
+        <div class="panel-title">Capacity and Min SOC</div>
+
         <select
           id="batteryMode"
+          class="control"
           aria-label="Capacity and Min SOC source"
-          style="font-size: 14px; width: 100%; max-width: 190px"
         >
           <option value="auto">Auto-detect from FoxESS</option>
           <option value="manual">Enter manually</option>
         </select>
 
         <div id="batteryAutoPanel">
-          <div
-            style="
-              display: grid;
-              grid-template-columns: 72px 1fr;
-              gap: 2px 8px;
-              font-size: 14px;
-              margin-top: 6px;
-            "
-          >
-            <span style="color: #555">Capacity</span>
-            <span id="detectedCapacityText">not detected yet</span>
-            <span style="color: #555">Min SOC</span>
-            <span id="detectedMinSocText">not detected yet</span>
+          <div class="readout">
+            <div class="readout-row">
+              <span class="key">Capacity</span>
+              <span class="value" id="detectedCapacityText"
+                >not detected yet</span
+              >
+            </div>
+            <div class="readout-row">
+              <span class="key">Min SOC</span>
+              <span class="value" id="detectedMinSocText"
+                >not detected yet</span
+              >
+            </div>
           </div>
-          <div
-            id="batteryFreshness"
-            style="font-size: 12px; color: #888; margin-top: 6px"
-          ></div>
-          <button
-            id="refreshBatteryBtn"
-            type="button"
-            style="
-              margin-top: 6px;
-              padding: 3px 8px;
-              font-size: 12px;
-              cursor: pointer;
-            "
-          >
+          <div id="batteryFreshness" class="hint"></div>
+          <button id="refreshBatteryBtn" class="btn" type="button">
             Refresh from FoxESS
           </button>
-          <details
-            id="batteryDetails"
-            style="font-size: 12px; color: #888; margin-top: 6px"
-          >
-            <summary style="cursor: pointer">Details</summary>
-            <div
-              id="batteryDetectLog"
-              style="margin-top: 4px; white-space: pre-line"
-            ></div>
+          <details id="batteryDetails" class="details">
+            <summary>Details</summary>
+            <div id="batteryDetectLog" class="log"></div>
           </details>
         </div>
 
         <div id="batteryManualFields" style="display: none">
-          <label style="display: block; margin-top: 8px; font-size: 14px">
-            <span style="display: block; margin-bottom: 4px"
-              >Max Capacity (kWh)</span
-            >
+          <label class="field">
+            <span>Max Capacity (kWh)</span>
             <input
               id="batteryCapacityKwh"
+              class="control half"
               type="number"
               min="0"
               step="0.1"
-              style="width: 90px; font-size: 14px"
             />
           </label>
-
-          <label style="display: block; margin-top: 10px; font-size: 14px">
-            <span
-              style="display: block; margin-bottom: 4px"
-              title="On-grid discharge floor (Battery Reserve Capacity)"
+          <label class="field">
+            <span title="On-grid discharge floor (Battery Reserve Capacity)"
               >Min SOC (%)</span
             >
             <input
               id="minSocPercent"
+              class="control half"
               type="number"
               min="0"
               max="100"
               step="1"
               placeholder="%"
-              style="width: 90px; font-size: 14px"
             />
           </label>
-          <div style="font-size: 12px; color: #888; margin-top: 6px">
-            Used while manual entry is selected.
-          </div>
+          <div class="hint">Used while manual entry is selected.</div>
         </div>
       </div>
-    </div>
+    </section>
 
     <script src="popup.js"></script>
   </body>
