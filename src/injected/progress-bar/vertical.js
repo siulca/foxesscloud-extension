@@ -494,12 +494,21 @@ function ensureHistoryChart() {
         left: -${HISTORY_GRAPH_WIDTH + 15}px;
         top: 0;
         width: ${HISTORY_GRAPH_WIDTH}px;
-        height: ${HISTORY_GRAPH_HEIGHT}px;
+        height: 100%;
         pointer-events: none;
       `;
     wrapper.appendChild(historyWrapper);
   } else if (historyWrapper.parentElement !== wrapper) {
     wrapper.appendChild(historyWrapper);
+  }
+
+  // Match the gauge's inner (fill) box instead of a fixed 80px. Under
+  // border-box the wrapper's 2px border leaves only 76px for the fill, so a
+  // fixed height stretches the graph past it and puts the arrow a few pixels
+  // below the teal bar. A percentage resolves against the same padding box
+  // the fill uses, so 0-100% lines up exactly either way.
+  if (historyWrapper.style.height !== "100%") {
+    historyWrapper.style.height = "100%";
   }
 
   if (document.getElementById("solar-history-svg")) return false;
@@ -510,6 +519,9 @@ function ensureHistoryChart() {
     "viewBox",
     `0 0 ${HISTORY_GRAPH_WIDTH} ${HISTORY_GRAPH_HEIGHT}`
   );
+  // Stretch vertically to the container instead of letterboxing: the graph is
+  // drawn in 0-100% coordinates, so its rows must map onto the fill's rows.
+  svg.setAttribute("preserveAspectRatio", "none");
   svg.style.cssText = `
       width: 100%;
       height: 100%;
